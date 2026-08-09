@@ -1,0 +1,5 @@
+idle:12
+run:14
+attack:10
+hurt:10
+dead:12

@@ -1,0 +1,33 @@
+{
+  "$schema": "../schemas/project.schema.json",
+  "project_id": "p_dqmc",
+  "author": {
+    "id": "548607299"
+  },
+  "entry": "main.lua",
+  "version": "1.0.118",
+  "taptap_publish": {
+    "title": "末世搜寻",
+    "description": "在末世街道中搜寻物资，用散弹枪击退成群的丧尸！",
+    "category": "action",
+    "screen_orientation": "landscape",
+    "collection_type": "sce",
+    "trial_note": "<developer's note>",
+    "app_platforms": "1,2",
+    "developer_id": 259984,
+    "app_id": 860589,
+    "miniapp_id": "tapmck2smtj4ped03g"
+  },
+  "assets": {
+    "icon": "",
+    "screenshots": [],
+    "promotional_image": ""
+  },
+  "test_qrcode": {
+    "url": "https://tapcode-sce.spark.xd.com/qrcode/p_dqmc_1782018160772.png",
+    "generated_at": "2026-06-21T05:02:40.894Z"
+  },
+  "metadata": {
+    "updated_at": "2026-06-21T05:02:40.894Z"
+  }
+}
