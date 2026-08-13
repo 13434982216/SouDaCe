@@ -11,6 +11,8 @@ HomeUI = require "HomeUI"
 WarehouseUI = require "WarehouseUI"
 ShopUI = require "ShopUI"
 CodexUI = require "CodexUI"
+BlackMarketUI = require "BlackMarketUI"
+BlackMarketCloud = require "BlackMarketCloud"
 
 local joystick_     = nil   -- 虚拟摇杆（PC键盘/移动触摸统一接口）
 local descendBtn_   = nil   -- 开门按钮（手机端，原Crouch）
@@ -384,7 +386,7 @@ local lootUI = {
 }
 
 -- ── 资源加载状态（进入游戏前先加载所有资源）──
-local appState = "loading"   -- "loading" | "home" | "shop" | "warehouse" | "loadout" | "playing"
+local appState = "loading"   -- "loading" | "home" | "shop" | "blackmarket" | "warehouse" | "loadout" | "playing"
 loadoutWarehouseIdx = nil
 local homeTouchActive = false -- 首页触摸防抖
 local homeTouchX = 0
@@ -515,6 +517,66 @@ local PRELOAD_RESOURCES = {
     "image/天台花盆组合_20260602090730.png",
     "image/天台遮阳伞_20260602090728.png",
     "image/player_char.png",
+    "image/首页空手幸存者立绘_20260811135500.png",
+    "image/首页日本全国感染态势图_20260811135348.png",
+    "image/首页东京废弃城区预览_20260811135412.png",
+    "image/首页设计稿母版.png",
+    "image/warehouse/据点仓库设计稿母版.png",
+    "image/仓库翡翠原石风格物资_20260813045549_clean.png",
+    "image/仓库金条风格物资_20260813045541_clean.png",
+    "image/仓库古董花瓶风格物资_20260813045540_clean.png",
+    "image/仓库军用平板风格物资_20260813045546_clean.png",
+    "image/warehouse/item_cells/物资格_红色传说_2x2.png",
+    "image/warehouse/item_cells/物资格_金色传说_2x1.png",
+    "image/warehouse/item_cells/物资格_粉色史诗_2x2.png",
+    "image/warehouse/item_cells/物资格_紫色稀有_2x1.png",
+    "image/warehouse/item_cells/物资格_蓝色精良_1x1.png",
+    "image/warehouse/item_cells/物资格_绿色普通_1x1.png",
+    -- 商城高密度设计稿拆件
+    "image/shop_design/顶部完整条.png",
+    "image/shop_design/左侧分类金属外框.png",
+    "image/shop_design/中央外框顶.png",
+    "image/shop_design/中央外框底.png",
+    "image/shop_design/中央外框左.png",
+    "image/shop_design/中央外框右.png",
+    "image/shop_design/边缘_左.png",
+    "image/shop_design/间隔_分类中央.png",
+    "image/shop_design/间隔_中央档案.png",
+    "image/shop_design/边缘_右.png",
+    "image/shop_design/商品列间隔_一.png",
+    "image/shop_design/商品列间隔_二.png",
+    "image/shop_design/商品行间隔.png",
+    "image/shop_design/底部背景条.png",
+    "image/shop_design/右侧军需档案_动态底板.png",
+    "image/shop_design/sidebar/按钮_选中空白.png",
+    "image/shop_design/sidebar/按钮_未选中空白.png",
+    "image/shop_design/sidebar/图标_深色_guns.png",
+    "image/shop_design/sidebar/图标_深色_ammo.png",
+    "image/shop_design/sidebar/图标_深色_armor.png",
+    "image/shop_design/sidebar/图标_深色_helmets.png",
+    "image/shop_design/sidebar/图标_深色_rigs.png",
+    "image/shop_design/sidebar/图标_深色_backpacks.png",
+    "image/shop_design/sidebar/图标_深色_safe_boxes.png",
+    "image/shop_design/sidebar/图标_浅色_guns.png",
+    "image/shop_design/sidebar/图标_浅色_ammo.png",
+    "image/shop_design/sidebar/图标_浅色_armor.png",
+    "image/shop_design/sidebar/图标_浅色_helmets.png",
+    "image/shop_design/sidebar/图标_浅色_rigs.png",
+    "image/shop_design/sidebar/图标_浅色_backpacks.png",
+    "image/shop_design/sidebar/图标_浅色_safe_boxes.png",
+    "image/shop_design/cards/卡片底板_蓝色.png",
+    "image/shop_design/cards/卡片底板_紫色.png",
+    "image/shop_design/cards/卡片底板_绿色.png",
+    "image/home_layers/首页背景_无UI.png",
+    "image/home_layers/首页Logo.png",
+    "image/home_layers/面板边框_角色.png",
+    "image/home_layers/面板边框_态势地图.png",
+    "image/home_layers/面板边框_地图情报.png",
+    "image/home_layers/顶部信息条背景.png",
+    "image/home_layers/底部导航按钮背景.png",
+    "image/home_layers/战前整备按钮背景.png",
+    "image/home_layers/更换地图按钮背景.png",
+    "image/home_layers/进入地图按钮背景.png",
     "image/卡通末世双管折管散弹枪物品_20260725160700.png",
     "image/手枪弹药盒_20260801074149.png",
     "image/散弹枪弹药包_20260801074017.png",
@@ -584,6 +646,15 @@ local PRELOAD_RESOURCES = {
     "image/二级防弹衣_20260727114218.png",
     "image/二级胸挂_20260727073514.png",
     "image/高级战术安全箱_20260731060159.png",
+    "image/三级红色战术安全箱_20260731125534.png",
+    -- 黑市交易终端专用视觉资源
+    "image/黑市商人渡鸦肖像_20260809093215.png",
+    "image/地下管道撤离情报地图_20260809093224.png",
+    "image/伪造实验室门禁卡_20260809093213.png",
+    "image/黑市通用战术消音器_20260809100641.png",
+    "image/黑市武器保险券_20260809100637.png",
+    -- 首页远观沦陷城市视觉资源
+    "image/远望日本沦陷城市_20260811103414.png",
     -- 二级背包图标
     "image/backpack_tier2_20260718072219.png",
 }
@@ -592,6 +663,22 @@ local loadingSpinnerImg = 0  -- 搜索放大镜图标NanoVG纹理ID
 local backpackTier2Img = 0  -- 二级背包图标
 -- 物品图标NanoVG纹理ID表
 local itemIcons = {}  -- { ["物品名"] = nvgImageId }
+blackMarketArt = {
+    broker = 0,
+    home_crisis = 0,
+    home_survivor = 0,
+    home_national_map = 0,
+    home_location = 0,
+    home_master = 0,
+    home_layers = {},
+    warehouse_master = 0,
+    warehouse_cells = {},
+    shop_design = {},
+    tunnel_intel = 0,
+    lab_keycard = 0,
+    suppressor = 0,
+    weapon_insurance = 0,
+}
 local roomDecorImgs = {} -- 一楼左侧客厅装饰家具纹理
 local lootBtnPressed_ = false  -- 手机端"搜刮"按钮按下标记
 local lootBtn_ = nil           -- 搜刮虚拟按钮
@@ -638,7 +725,7 @@ INVENTORY_MAX = 12  -- 背包最大物品数（非格子数）
 -- 据点仓库独立于战术背包；首仓保存出战装备和武器。
 warehouseTabs = {
     { name = "一号仓库", unlocked = true, level = 1, maxLevel = 3, cols = 8, rows = 20,
-        items = { "手枪", "棒球棍", "散弹枪", "二级头盔", "二级防弹衣", "二级胸挂", "二级背包", "二级安全箱" },
+        items = { "翡翠原石", "金条", "古董花瓶", "平板电脑", "二级头盔", "二级防弹衣", "二级胸挂", "二级背包", "二级安全箱" },
         upgradeMaterials = {
             [2] = { { item = "螺丝刀", count = 2 }, { item = "胶带", count = 3 } },
             [3] = { { item = "扳手", count = 2 }, { item = "电池", count = 5 } },
@@ -1246,6 +1333,7 @@ ITEM_SIZES["香槟酒"] = {1, 2}
 ITEM_SIZES["高级香烟"] = {1, 1}
 ITEM_SIZES["名贵香水"] = {1, 1}
 ITEM_SIZES["加密硬盘"] = {2, 1}
+ITEM_SIZES["通用战术消音器"] = {2, 1}
 ITEM_SIZES["军用望远镜"] = {2, 1}
 ITEM_SIZES["卫星电话"] = {2, 1}
 ITEM_SIZES["古董相机"] = {2, 2}
@@ -1263,6 +1351,7 @@ ITEM_RARITY["香槟酒"] = "red"
 ITEM_RARITY["高级香烟"] = "blue"
 ITEM_RARITY["名贵香水"] = "purple"
 ITEM_RARITY["加密硬盘"] = "pink"
+ITEM_RARITY["通用战术消音器"] = "purple"
 ITEM_RARITY["军用望远镜"] = "purple"
 ITEM_RARITY["卫星电话"] = "pink"
 ITEM_RARITY["古董相机"] = "purple"
@@ -1277,6 +1366,7 @@ ITEM_RARITY["黄金半身像"] = "red"
 ITEM_RARITY["军用加固笔记本"] = "red"
 
 lootUI.itemValues["加密硬盘"] = { value = 24000, desc = "加密数据盘，里面可能保存着旧时代的重要资料。" }
+lootUI.itemValues["通用战术消音器"] = { value = 34000, desc = "适配多种枪口的高等级战术消音器，黑市渠道来源不明。" }
 lootUI.itemValues["军用望远镜"] = { value = 11000, desc = "耐用的军用光学设备，侦察和交易都很有价值。" }
 lootUI.itemValues["卫星电话"] = { value = 30000, desc = "仍可能工作的卫星通信设备，稀缺且价值很高。" }
 lootUI.itemValues["古董相机"] = { value = 14500, desc = "保存较好的老式相机，收藏者愿意高价收购。" }
@@ -1703,6 +1793,489 @@ function openShopPanel()
     print("[Shop] 从据点首页进入战术补给商城，余额=" .. lootUI.FormatBitValue(lootUI.bits))
 end
 
+blackMarketRates = {
+    valuables = 1.12,
+    electronics = 1.18,
+    medical = 1.05,
+    materials = 0.92,
+    equipment = 0.96,
+    supplies = 1.03,
+}
+blackMarketRefreshDuration = 30 * 60
+blackMarketRefreshRemaining = 18 * 60 + 42
+blackMarketRefreshSerial = 0
+BLACK_MARKET_RATE_CATEGORIES = {
+    "valuables", "electronics", "medical", "materials", "equipment", "supplies",
+}
+blackMarketReputation = 0
+blackMarketActionSerial = 0
+blackMarketHistory = {}
+blackMarketOrders = {
+    {
+        id = "offline_server",
+        buyer = "灰鸦 / GREY CROW",
+        title = "离线服务器",
+        description = "从封锁区居民楼带回两块加密硬盘。买家只接收完整且未拆解的存储设备。",
+        requirements = { { item = "加密硬盘", count = 2 } },
+        reward = 68000,
+        reputation = 20,
+        accepted = false,
+        completed = false,
+    },
+    {
+        id = "field_clinic",
+        buyer = "无证医生 / FIELD DOC",
+        title = "战地诊所",
+        description = "地下诊所急需一批医疗和饮水补给，交付后将开放更稳定的医疗采购渠道。",
+        requirements = { { item = "急救包", count = 3 }, { item = "净水", count = 2 } },
+        reward = 42000,
+        reputation = 15,
+        accepted = false,
+        completed = false,
+    },
+    {
+        id = "no_questions",
+        buyer = "收藏家 K / COLLECTOR K",
+        title = "不问来源",
+        description = "收藏家正在寻找灾变前的机械腕表，不追问来源，也不接受替代品。",
+        requirements = { { item = "名厂机械腕表", count = 1 } },
+        reward = 185000,
+        reputation = 40,
+        accepted = false,
+        completed = false,
+    },
+}
+blackMarketMerchantStock = {
+    {
+        id = "encrypted_drive",
+        item = "加密硬盘",
+        name = "加密硬盘",
+        tag = "电子设备 / 高价收购",
+        description = "渡鸦正在回收未拆解的加密存储设备，用于恢复封锁区旧服务器中的实验记录。",
+        price = 36000,
+        stock = 3,
+        maxStock = 3,
+    },
+    {
+        id = "military_laptop",
+        item = "军用加固笔记本",
+        name = "军用加固笔记本",
+        tag = "军用电子 / 稀缺",
+        description = "只接收机身完整、接口未被破坏的军用终端，内部数据是否可读不影响结算。",
+        price = 310000,
+        stock = 1,
+        maxStock = 1,
+    },
+    {
+        id = "thermal_scope",
+        item = "军用热成像仪",
+        name = "军用热成像仪",
+        tag = "光学设备 / 紧急需求",
+        description = "地下运输队急需夜间侦察设备，渡鸦愿意为完整热成像模组支付额外溢价。",
+        price = 145000,
+        stock = 2,
+        maxStock = 2,
+    },
+    {
+        id = "bio_sample",
+        item = "机密生物样本",
+        name = "机密生物样本",
+        tag = "实验样本 / 高风险",
+        description = "来源不明的生物样本必须保持密封。渡鸦不会询问取得过程，但会检查容器完整性。",
+        price = 225000,
+        stock = 2,
+        maxStock = 2,
+    },
+    {
+        id = "vintage_watch",
+        item = "名厂机械腕表",
+        name = "名厂机械腕表",
+        tag = "灾前收藏 / 限量",
+        description = "海外收藏家通过渡鸦秘密征集灾变前腕表，只接受原装机械结构完整的藏品。",
+        price = 210000,
+        stock = 1,
+        maxStock = 1,
+    },
+    {
+        id = "control_chip",
+        item = "航空级控制芯片",
+        name = "航空级控制芯片",
+        tag = "精密元件 / 高需求",
+        description = "撤离航线维护组需要航空级控制芯片修复导航设备，针脚完整即可成交。",
+        price = 125000,
+        stock = 2,
+        maxStock = 2,
+    },
+}
+blackMarketPerks = {
+    tunnel_intel = false,
+    lab_keycard = false,
+    weapon_insurance = false,
+}
+
+BLACK_MARKET_CATEGORY_ITEMS = {
+    electronics = {
+        ["旧手机"] = true, ["机械键盘"] = true, ["平板电脑"] = true,
+        ["加密硬盘"] = true, ["卫星电话"] = true, ["显卡"] = true,
+        ["军用加固笔记本"] = true, ["加密无人机核心"] = true,
+        ["航空级控制芯片"] = true, ["军用热成像仪"] = true,
+    },
+    medical = { ["急救包"] = true, ["机密生物样本"] = true },
+    materials = {
+        ["螺丝刀"] = true, ["电池"] = true, ["胶带"] = true, ["扳手"] = true,
+        ["高纯度钯金块"] = true, ["精密光学模组"] = true,
+    },
+    equipment = {
+        ["手枪"] = true, ["散弹枪"] = true, ["棒球棍"] = true,
+        ["二级头盔"] = true, ["二级防弹衣"] = true, ["二级胸挂"] = true,
+        ["二级背包"] = true, ["二级安全箱"] = true, ["三级安全箱"] = true,
+        ["手枪弹药盒"] = true, ["散弹枪弹药包"] = true,
+        ["通用战术消音器"] = true,
+    },
+    supplies = {
+        ["罐头"] = true, ["净水"] = true, ["稀有咖啡豆"] = true,
+        ["香槟酒"] = true, ["高级香烟"] = true,
+    },
+}
+
+BlackMarketCloud.VERSION = 1
+BlackMarketCloud.LOAD_TIMEOUT = 8.0
+BlackMarketCloud.loadStarted = false
+BlackMarketCloud.loadComplete = false
+BlackMarketCloud.loadElapsed = 0
+BlackMarketCloud.dirty = false
+BlackMarketCloud.saving = false
+BlackMarketCloud.saveDelay = 0
+BlackMarketCloud.dirtyReason = ""
+
+function BlackMarketCloud.CloneValue(value)
+    if type(value) ~= "table" then return value end
+    local result = {}
+    for key, child in pairs(value) do
+        result[BlackMarketCloud.CloneValue(key)] = BlackMarketCloud.CloneValue(child)
+    end
+    return result
+end
+
+function BlackMarketCloud.SanitizeWarehouseItems(items)
+    local result = {}
+    if type(items) ~= "table" then return result end
+    for _, entry in ipairs(items) do
+        local itemName = type(entry) == "table" and entry.item or entry
+        if type(itemName) == "string" and ITEM_SIZES[itemName]
+            and not lootUI.IsTakenGridEntry(entry) then
+            if type(entry) == "table" then
+                local cleaned = { item = itemName }
+                if type(entry.col) == "number" then cleaned.col = math.max(1, math.floor(entry.col)) end
+                if type(entry.row) == "number" then cleaned.row = math.max(1, math.floor(entry.row)) end
+                if entry.orientation == "vertical" then cleaned.orientation = "vertical" end
+                result[#result + 1] = cleaned
+            else
+                result[#result + 1] = itemName
+            end
+        end
+    end
+    return result
+end
+
+function BlackMarketCloud.BuildSnapshot()
+    local warehouse = {}
+    for index, tab in ipairs(warehouseTabs or {}) do
+        lootUI.CleanupTakenEntries(tab.items)
+        warehouse[index] = {
+            unlocked = tab.unlocked == true,
+            level = math.floor(tonumber(tab.level) or 1),
+            cols = math.floor(tonumber(tab.cols) or 8),
+            rows = math.floor(tonumber(tab.rows) or 20),
+            items = BlackMarketCloud.CloneValue(tab.items or {}),
+        }
+    end
+
+    local orderStates = {}
+    for _, order in ipairs(blackMarketOrders or {}) do
+        orderStates[order.id] = {
+            accepted = order.accepted == true,
+            completed = order.completed == true,
+        }
+    end
+
+    local merchantStock = {}
+    for _, product in ipairs(blackMarketMerchantStock or {}) do
+        merchantStock[product.id] = math.floor(tonumber(product.stock) or 0)
+    end
+
+    return {
+        version = BlackMarketCloud.VERSION,
+        bits = math.max(0, math.floor(tonumber(lootUI.bits) or 0)),
+        warehouse = warehouse,
+        loadout = {
+            inventory = BlackMarketCloud.CloneValue(playerInventory),
+            chestRig = BlackMarketCloud.CloneValue(playerChestRig),
+            pocket = BlackMarketCloud.CloneValue(playerPocket),
+            safeBox = BlackMarketCloud.CloneValue(playerSafeBox),
+            equipped = {
+                helmet = lootUI.equippedHelmetItem,
+                armor = lootUI.equippedArmorItem,
+                rig = lootUI.equippedRigItem,
+                backpack = lootUI.equippedBackpackItem,
+                safeBox = lootUI.equippedSafeBoxItem,
+                gun = lootUI.equippedGunItem,
+                melee = lootUI.equippedMeleeItem,
+            },
+        },
+        blackMarket = {
+            reputation = math.max(0, math.floor(tonumber(blackMarketReputation) or 0)),
+            actionSerial = math.max(0, math.floor(tonumber(blackMarketActionSerial) or 0)),
+            refreshRemaining = math.max(0, tonumber(blackMarketRefreshRemaining) or 0),
+            refreshSerial = math.max(0, math.floor(tonumber(blackMarketRefreshSerial) or 0)),
+            rates = BlackMarketCloud.CloneValue(blackMarketRates),
+            orderStates = orderStates,
+            merchantStock = merchantStock,
+            perks = BlackMarketCloud.CloneValue(blackMarketPerks),
+            history = BlackMarketCloud.CloneValue(blackMarketHistory),
+        },
+    }
+end
+
+function BlackMarketCloud.EnsureShowcaseWarehouseItems()
+    local tab = warehouseTabs and warehouseTabs[1]
+    if not tab then return end
+    local required = { "翡翠原石", "金条", "古董花瓶", "平板电脑" }
+    local present = {}
+    for _, entry in ipairs(tab.items or {}) do
+        local itemName = type(entry) == "table" and entry.item or entry
+        present[itemName] = true
+    end
+    for _, itemName in ipairs(required) do
+        if not present[itemName] then
+            table.insert(tab.items, itemName)
+        end
+    end
+end
+
+function BlackMarketCloud.ApplySnapshot(snapshot)
+    if type(snapshot) ~= "table" then return false end
+    local version = math.floor(tonumber(snapshot.version) or 0)
+    if version < 1 or version > BlackMarketCloud.VERSION then
+        print("[Cloud] 忽略不支持的黑市云档版本: " .. tostring(version))
+        return false
+    end
+
+    if type(snapshot.bits) == "number" then
+        lootUI.bits = math.max(0, math.floor(snapshot.bits))
+    end
+
+    if type(snapshot.warehouse) == "table" then
+        for index, savedTab in ipairs(snapshot.warehouse) do
+            local tab = warehouseTabs and warehouseTabs[index]
+            if tab and type(savedTab) == "table" then
+                if type(savedTab.unlocked) == "boolean" then tab.unlocked = savedTab.unlocked end
+                tab.level = math.max(1, math.min(tab.maxLevel or 3,
+                    math.floor(tonumber(savedTab.level) or tab.level or 1)))
+                tab.cols = math.max(1, math.floor(tonumber(savedTab.cols) or tab.cols or 8))
+                tab.rows = math.max(1, math.floor(tonumber(savedTab.rows) or tab.rows or 20))
+                tab.items = BlackMarketCloud.SanitizeWarehouseItems(savedTab.items)
+            end
+        end
+    end
+
+    if type(snapshot.loadout) == "table" then
+        playerInventory = BlackMarketCloud.SanitizeWarehouseItems(snapshot.loadout.inventory)
+        playerChestRig = BlackMarketCloud.SanitizeWarehouseItems(snapshot.loadout.chestRig)
+        playerPocket = BlackMarketCloud.SanitizeWarehouseItems(snapshot.loadout.pocket)
+        playerSafeBox = BlackMarketCloud.SanitizeWarehouseItems(snapshot.loadout.safeBox)
+        local equipped = snapshot.loadout.equipped
+        if type(equipped) == "table" then
+            local function validEquipped(itemName)
+                return type(itemName) == "string" and ITEM_SIZES[itemName]
+                    and itemName or ""
+            end
+            lootUI.equippedHelmetItem = validEquipped(equipped.helmet)
+            lootUI.equippedArmorItem = validEquipped(equipped.armor)
+            lootUI.equippedRigItem = validEquipped(equipped.rig)
+            lootUI.equippedBackpackItem = validEquipped(equipped.backpack)
+            lootUI.equippedSafeBoxItem = validEquipped(equipped.safeBox)
+            lootUI.equippedGunItem = validEquipped(equipped.gun)
+            lootUI.equippedMeleeItem = validEquipped(equipped.melee)
+            lootUI.UpdateSafeBoxCapacity(lootUI.equippedSafeBoxItem)
+        end
+    end
+
+    local market = snapshot.blackMarket
+    if type(market) ~= "table" then return true end
+    blackMarketReputation = math.max(0,
+        math.floor(tonumber(market.reputation) or blackMarketReputation))
+    blackMarketActionSerial = math.max(0,
+        math.floor(tonumber(market.actionSerial) or blackMarketActionSerial))
+    blackMarketRefreshRemaining = math.max(0.1,
+        math.min(blackMarketRefreshDuration,
+            tonumber(market.refreshRemaining) or blackMarketRefreshRemaining))
+    blackMarketRefreshSerial = math.max(0,
+        math.floor(tonumber(market.refreshSerial) or blackMarketRefreshSerial))
+
+    if type(market.rates) == "table" then
+        for category in pairs(blackMarketRates) do
+            local rate = tonumber(market.rates[category])
+            if rate then blackMarketRates[category] = math.max(0.25, math.min(3.0, rate)) end
+        end
+    end
+
+    if type(market.orderStates) == "table" then
+        for _, order in ipairs(blackMarketOrders) do
+            local state = market.orderStates[order.id]
+            if type(state) == "table" then
+                order.accepted = state.accepted == true or state.completed == true
+                order.completed = state.completed == true
+            end
+        end
+    end
+
+    if type(market.merchantStock) == "table" then
+        for _, product in ipairs(blackMarketMerchantStock) do
+            local stock = tonumber(market.merchantStock[product.id])
+            if stock then
+                product.stock = math.max(0,
+                    math.min(product.maxStock or stock, math.floor(stock)))
+            end
+        end
+    end
+
+    if type(market.perks) == "table" then
+        for perk in pairs(blackMarketPerks) do
+            blackMarketPerks[perk] = market.perks[perk] == true
+        end
+    end
+
+    if type(market.history) == "table" then
+        blackMarketHistory = {}
+        for index, entry in ipairs(market.history) do
+            if index > 30 then break end
+            if type(entry) == "table" then
+                blackMarketHistory[#blackMarketHistory + 1] = {
+                    action = math.max(0, math.floor(tonumber(entry.action) or 0)),
+                    description = tostring(entry.description or "黑市交易"):sub(1, 180),
+                    amount = math.floor(tonumber(entry.amount) or 0),
+                    balance = math.max(0, math.floor(tonumber(entry.balance) or 0)),
+                    time = type(entry.time) == "string" and entry.time:sub(1, 40) or nil,
+                }
+            end
+        end
+    end
+    return true
+end
+
+function BlackMarketCloud.MarkDirty(reason, immediate)
+    if not BlackMarketCloud.IsAvailable() then return end
+    BlackMarketCloud.dirty = true
+    BlackMarketCloud.dirtyReason = reason or "state_changed"
+    BlackMarketCloud.saveDelay = immediate and 0 or 0.8
+end
+
+function BlackMarketCloud.Flush()
+    if not BlackMarketCloud.dirty or BlackMarketCloud.saving
+        or not BlackMarketCloud.IsAvailable() then return end
+    BlackMarketCloud.dirty = false
+    BlackMarketCloud.saving = true
+    local reason = BlackMarketCloud.dirtyReason ~= ""
+        and BlackMarketCloud.dirtyReason or "checkpoint"
+    local snapshot = BlackMarketCloud.BuildSnapshot()
+    BlackMarketCloud.Save(snapshot, function(success, status, detail)
+        BlackMarketCloud.saving = false
+        if success then
+            print("[Cloud] 黑市档案保存成功: " .. reason)
+            if BlackMarketCloud.dirty then BlackMarketCloud.saveDelay = 0 end
+        else
+            BlackMarketCloud.dirty = true
+            BlackMarketCloud.saveDelay = 5.0
+            print("[Cloud] 黑市档案保存失败: " .. tostring(status)
+                .. " " .. tostring(detail or ""))
+        end
+    end)
+end
+
+function BlackMarketCloud.BeginLoad()
+    if BlackMarketCloud.loadStarted then return end
+    BlackMarketCloud.loadStarted = true
+    BlackMarketCloud.loadElapsed = 0
+    loadStatusText = "正在同步黑市档案..."
+    print("[Cloud] 开始读取黑市档案")
+    local settled = false
+    local ok, reason = pcall(function()
+        BlackMarketCloud.Load(function(snapshot, status, detail)
+            if settled or BlackMarketCloud.loadComplete then return end
+            settled = true
+            if snapshot and BlackMarketCloud.ApplySnapshot(snapshot) then
+                BlackMarketCloud.EnsureShowcaseWarehouseItems()
+                print("[Cloud] 黑市档案读取成功，版本=" .. tostring(snapshot.version))
+            elseif status == "empty" then
+                print("[Cloud] 未找到黑市云档，使用默认档案")
+                BlackMarketCloud.MarkDirty("create_profile", true)
+            else
+                print("[Cloud] 黑市档案读取失败，使用默认档案: "
+                    .. tostring(status) .. " " .. tostring(detail or ""))
+            end
+            BlackMarketCloud.loadComplete = true
+            loadStatusText = "加载完成"
+        end)
+    end)
+    if not ok then
+        BlackMarketCloud.loadComplete = true
+        loadStatusText = "加载完成"
+        print("[Cloud] 黑市档案读取异常，使用默认档案: " .. tostring(reason))
+    end
+end
+
+function updateBlackMarketRefresh(dt)
+    local elapsed = math.max(0, tonumber(dt) or 0)
+    blackMarketRefreshRemaining = blackMarketRefreshRemaining - elapsed
+    blackMarketRefreshCloudCheckpoint = (blackMarketRefreshCloudCheckpoint or 30) - elapsed
+
+    if blackMarketRefreshRemaining <= 0 then
+        blackMarketRefreshSerial = blackMarketRefreshSerial + 1
+        local categoryIndex = 0
+        for _, category in ipairs(BLACK_MARKET_RATE_CATEGORIES) do
+            categoryIndex = categoryIndex + 1
+            local wave = math.sin(blackMarketRefreshSerial * 1.73 + categoryIndex * 2.41)
+            local fine = math.sin(blackMarketRefreshSerial * 0.61 + categoryIndex * 4.17) * 0.035
+            blackMarketRates[category] = math.max(0.78,
+                math.min(1.24, 1.0 + wave * 0.16 + fine))
+        end
+        blackMarketRefreshRemaining = blackMarketRefreshDuration
+        blackMarketRefreshCloudCheckpoint = 30
+        BlackMarketCloud.MarkDirty("market_refresh", true)
+        print("[BlackMarket] 行情已刷新，轮次=" .. tostring(blackMarketRefreshSerial))
+    elseif blackMarketRefreshCloudCheckpoint <= 0 then
+        blackMarketRefreshCloudCheckpoint = 30
+        BlackMarketCloud.MarkDirty("market_timer", false)
+    end
+end
+
+function getBlackMarketCategory(itemName)
+    for category, items in pairs(BLACK_MARKET_CATEGORY_ITEMS) do
+        if items[itemName] then return category end
+    end
+    return "valuables"
+end
+
+function addBlackMarketHistory(description, amount)
+    blackMarketActionSerial = blackMarketActionSerial + 1
+    table.insert(blackMarketHistory, 1, {
+        action = blackMarketActionSerial,
+        description = description,
+        amount = amount,
+        balance = lootUI.bits,
+    })
+    while #blackMarketHistory > 30 do table.remove(blackMarketHistory) end
+end
+
+function openBlackMarketPanel()
+    lootUI.CleanupTakenEntries(warehouseTabs[1].items)
+    appState = "blackmarket"
+    BlackMarketUI.Open()
+    if joystick_ then joystick_._shouldShow = false end
+    print("[BlackMarket] 从据点首页进入交易终端，余额=" .. lootUI.FormatBitValue(lootUI.bits))
+end
+
 function getWarehouseUsedCells(tab)
     local usedCells = 0
     for _, entry in ipairs(tab.items or {}) do
@@ -1748,11 +2321,198 @@ function handleShopAction(action)
 
     lootUI.bits = lootUI.bits - product.price
     table.insert(warehouse.items, product.item)
+    BlackMarketCloud.MarkDirty("shop_purchase", true)
     ShopUI.SetNotice("购买成功，" .. product.shortName .. " 已送入一号仓库", true)
     print("[Shop] 购买成功: 商品=" .. product.item
         .. " 花费=" .. tostring(product.price)
         .. " 余额=" .. tostring(lootUI.bits)
         .. " 仓库物资数=" .. tostring(#warehouse.items))
+end
+
+function findBlackMarketOrder(orderId)
+    for _, order in ipairs(blackMarketOrders) do
+        if order.id == orderId then return order end
+    end
+    return nil
+end
+
+function findBlackMarketProduct(productId)
+    for _, product in ipairs(blackMarketMerchantStock) do
+        if product.id == productId then return product end
+    end
+    return nil
+end
+
+function countWarehouseItem(itemName)
+    local count = 0
+    for _, tab in ipairs(warehouseTabs) do
+        for _, entry in ipairs(tab.items or {}) do
+            local currentName = type(entry) == "table" and entry.item or entry
+            if currentName == itemName then count = count + 1 end
+        end
+    end
+    return count
+end
+
+function consumeWarehouseItem(itemName, count)
+    local remaining = count
+    for _, tab in ipairs(warehouseTabs) do
+        for index = #(tab.items or {}), 1, -1 do
+            local entry = tab.items[index]
+            local currentName = type(entry) == "table" and entry.item or entry
+            if currentName == itemName and remaining > 0 then
+                table.remove(tab.items, index)
+                remaining = remaining - 1
+            end
+        end
+        if remaining <= 0 then break end
+    end
+    return remaining <= 0
+end
+
+function handleBlackMarketSale()
+    local selection = BlackMarketUI.GetSellSelection()
+    if #selection == 0 then
+        BlackMarketUI.SetNotice("请先将仓库物资加入出售清单", false)
+        return
+    end
+    table.sort(selection, function(a, b)
+        if a.tabIndex == b.tabIndex then return a.itemIndex > b.itemIndex end
+        return a.tabIndex > b.tabIndex
+    end)
+
+    local validated = {}
+    local total = 0
+    for _, selected in ipairs(selection) do
+        local tab = warehouseTabs[selected.tabIndex]
+        local entry = tab and tab.items and tab.items[selected.itemIndex]
+        local itemName = type(entry) == "table" and entry.item or entry
+        if itemName then
+            local category = getBlackMarketCategory(itemName)
+            local rate = blackMarketRates[category] or 1.0
+            local payout = math.floor(lootUI.GetItemValue(itemName) * rate)
+            table.insert(validated, {
+                tab = tab,
+                tabIndex = selected.tabIndex,
+                itemIndex = selected.itemIndex,
+                itemName = itemName,
+                payout = payout,
+            })
+            total = total + payout
+        end
+    end
+    if #validated == 0 then
+        BlackMarketUI.ClearSellSelection()
+        BlackMarketUI.SetNotice("出售清单已失效，请重新选择", false)
+        return
+    end
+
+    local fee = math.floor(total * 0.05)
+    local payout = math.max(0, total - fee)
+    for _, sale in ipairs(validated) do
+        table.remove(sale.tab.items, sale.itemIndex)
+    end
+    lootUI.bits = lootUI.bits + payout
+    addBlackMarketHistory("出售 " .. tostring(#validated) .. " 件仓库物资（手续费 "
+        .. tostring(fee) .. "）", payout)
+    BlackMarketCloud.MarkDirty("black_market_sale", true)
+    BlackMarketUI.ClearSellSelection()
+    BlackMarketUI.SetNotice("交易完成，扣除手续费后获得 " .. lootUI.FormatBitValue(payout), true)
+    print("[BlackMarket] 出售成功: 数量=" .. tostring(#validated)
+        .. " 报价=" .. tostring(total) .. " 手续费=" .. tostring(fee)
+        .. " 实收=" .. tostring(payout) .. " 余额=" .. tostring(lootUI.bits))
+end
+
+function handleBlackMarketOrder(orderId)
+    local order = findBlackMarketOrder(orderId)
+    if not order then
+        BlackMarketUI.SetNotice("订单信息异常，请重新选择", false)
+        return
+    end
+    if order.completed then
+        BlackMarketUI.SetNotice("该订单已经完成", false)
+        return
+    end
+    if not order.accepted then
+        order.accepted = true
+        BlackMarketCloud.MarkDirty("black_market_order_accept", true)
+        BlackMarketUI.SetNotice("已接受委托：" .. order.title, true)
+        print("[BlackMarket] 接受订单: " .. order.id)
+        return
+    end
+
+    for _, requirement in ipairs(order.requirements or {}) do
+        if countWarehouseItem(requirement.item) < requirement.count then
+            BlackMarketUI.SetNotice("交付不足：需要 " .. requirement.item .. " ×" .. tostring(requirement.count), false)
+            return
+        end
+    end
+    for _, requirement in ipairs(order.requirements or {}) do
+        consumeWarehouseItem(requirement.item, requirement.count)
+    end
+    order.completed = true
+    lootUI.bits = lootUI.bits + order.reward
+    blackMarketReputation = blackMarketReputation + (order.reputation or 0)
+    addBlackMarketHistory("完成订单：" .. order.title, order.reward)
+    BlackMarketCloud.MarkDirty("black_market_order_complete", true)
+    BlackMarketUI.SetNotice("订单完成，获得 " .. lootUI.FormatBitValue(order.reward), true)
+    print("[BlackMarket] 订单完成: " .. order.id
+        .. " 奖励=" .. tostring(order.reward)
+        .. " 声望=" .. tostring(blackMarketReputation))
+end
+
+function handleBlackMarketMerchantSale(productId)
+    local request = findBlackMarketProduct(productId)
+    if not request then
+        BlackMarketUI.SetNotice("收购信息异常，请重新选择", false)
+        return
+    end
+    if (request.stock or 0) <= 0 then
+        BlackMarketUI.SetNotice("该项收购需求已经满足", false)
+        return
+    end
+    if not request.item or countWarehouseItem(request.item) <= 0 then
+        BlackMarketUI.SetNotice("仓库中没有可交付的 " .. tostring(request.item or "物资"), false)
+        return
+    end
+    if not consumeWarehouseItem(request.item, 1) then
+        BlackMarketUI.SetNotice("交付失败，请检查仓库库存", false)
+        return
+    end
+
+    local payout = math.max(0, math.floor(tonumber(request.price) or 0))
+    request.stock = math.max(0, (request.stock or 0) - 1)
+    lootUI.bits = lootUI.bits + payout
+    blackMarketReputation = blackMarketReputation + 2
+    addBlackMarketHistory("出售给渡鸦：" .. request.item, payout)
+    BlackMarketCloud.MarkDirty("black_market_merchant_sale", true)
+    BlackMarketUI.SetNotice("渡鸦已收货，获得 " .. lootUI.FormatBitValue(payout), true)
+    print("[BlackMarket] 渡鸦收购完成: " .. request.id
+        .. " 物资=" .. request.item
+        .. " 收入=" .. tostring(payout)
+        .. " 剩余需求=" .. tostring(request.stock)
+        .. " 余额=" .. tostring(lootUI.bits))
+end
+
+function handleBlackMarketAction(action)
+    if not action then return end
+    action = tostring(action)
+    if action == "back" then
+        appState = "home"
+        HomeUI.Reset()
+        print("[BlackMarket] 返回据点首页")
+        return
+    elseif action == "sell-confirm" then
+        handleBlackMarketSale()
+        return
+    end
+    local orderId = action:match("^order%-action:(.+)$")
+    if orderId then
+        handleBlackMarketOrder(orderId)
+        return
+    end
+    local productId = action:match("^merchant%-sell:(.+)$")
+    if productId then handleBlackMarketMerchantSale(productId) end
 end
 
 function openLoadoutPanel()
@@ -1798,6 +2558,7 @@ function confirmLoadout()
     appState = "playing"
     if joystick_ then joystick_._shouldShow = true end
     startGameAudio()
+    BlackMarketCloud.MarkDirty("loadout_confirm", true)
     print("[Loadout] 确认出战，进入封锁区")
 end
 
@@ -4443,6 +5204,7 @@ function returnToHomeFromGame()
     if rainSrcComp then rainSrcComp:Stop() end
     if bgmSrcComp then bgmSrcComp:Stop() end
     bgmStarted = false
+    BlackMarketCloud.MarkDirty("return_home", false)
 
     print("[Game] 退出本局，返回据点首页")
 end
@@ -8115,42 +8877,43 @@ local function drawLootUI(ctx, screenW, screenH)
     local slideY = panelY + math.floor((1 - anim) * 30)
 
     -- ── 顶部标题栏 ──
-    local titleH = 58
+    local titleH = isLoadoutMode and 44 or 58
     nvgBeginPath(ctx)
     nvgRoundedRect(ctx, panelX, slideY, panelW, titleH, 6)
     nvgFillColor(ctx, nvgRGBA(25, 30, 35, math.floor(250 * anim)))
     nvgFill(ctx)
     nvgFontFace(ctx, "sans")
     -- 关闭按钮放左上，避免被右侧平台/收入/虚拟控件遮挡
-    local closeSize = 48
-    local closeX = panelX + 8
-    local closeBtnY = slideY + 5
+    local closeSize = isLoadoutMode and 36 or 48
+    local closeX = panelX + (isLoadoutMode and 7 or 8)
+    local closeBtnY = slideY + math.floor((titleH - closeSize) * 0.5)
+    local closeInset = isLoadoutMode and 11 or 15
     lootUI.closeButtonRect = { x = closeX, y = closeBtnY, w = closeSize, h = closeSize }
     nvgBeginPath(ctx)
     nvgRoundedRect(ctx, closeX, closeBtnY, closeSize, closeSize, 8)
     nvgFillColor(ctx, nvgRGBA(160, 50, 50, math.floor(225 * anim)))
     nvgFill(ctx)
     nvgBeginPath(ctx)
-    nvgMoveTo(ctx, closeX + 15, closeBtnY + 15)
-    nvgLineTo(ctx, closeX + closeSize - 15, closeBtnY + closeSize - 15)
-    nvgMoveTo(ctx, closeX + closeSize - 15, closeBtnY + 15)
-    nvgLineTo(ctx, closeX + 15, closeBtnY + closeSize - 15)
+    nvgMoveTo(ctx, closeX + closeInset, closeBtnY + closeInset)
+    nvgLineTo(ctx, closeX + closeSize - closeInset, closeBtnY + closeSize - closeInset)
+    nvgMoveTo(ctx, closeX + closeSize - closeInset, closeBtnY + closeInset)
+    nvgLineTo(ctx, closeX + closeInset, closeBtnY + closeSize - closeInset)
     nvgStrokeColor(ctx, nvgRGBA(255, 255, 255, math.floor(250 * anim)))
-    nvgStrokeWidth(ctx, 4)
+    nvgStrokeWidth(ctx, isLoadoutMode and 3 or 4)
     nvgStroke(ctx)
 
-    nvgFontSize(ctx, 14)
+    nvgFontSize(ctx, isLoadoutMode and 12 or 14)
     nvgTextAlign(ctx, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
     nvgFillColor(ctx, nvgRGBA(200, 200, 200, math.floor(220 * anim)))
-    nvgText(ctx, panelX + 68, slideY + math.floor(titleH * 0.5),
+    nvgText(ctx, closeX + closeSize + 12, slideY + math.floor(titleH * 0.5),
         isLoadoutMode and "战前整备" or (inventoryOpenedFromHome and "据点仓库" or (lootUI.mode == "inventory" and "战术背包" or "搜刮")))
     -- 标题中间：仓库页显示物资管理说明，搜刮页显示容器名称
-    nvgFontSize(ctx, 15)
+    nvgFontSize(ctx, isLoadoutMode and 14 or 15)
     nvgTextAlign(ctx, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
     nvgFillColor(ctx, nvgRGBA(255, 220, 80, math.floor(255 * anim)))
     nvgText(ctx, panelX + math.floor(panelW * 0.5), slideY + math.floor(titleH * 0.5),
         isLoadoutMode and "战前整备" or (inventoryOpenedFromHome and "物资与装备管理" or chest.name))
-    nvgFontSize(ctx, 13)
+    nvgFontSize(ctx, isLoadoutMode and 12 or 13)
     nvgTextAlign(ctx, NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
     nvgFillColor(ctx, nvgRGBA(235, 205, 120, math.floor(245 * anim)))
     nvgText(ctx, panelX + panelW - 12, slideY + math.floor(titleH * 0.5),
@@ -14304,17 +15067,17 @@ function Start()
     -- 加载所有物品图标
     local itemIconPaths = {
         ["劳力士金表"] = "image/卡通末世物资_金表_20260723024804.png",
-        ["翡翠原石"]   = "image/卡通末世物资_翡翠原石_20260723024813.png",
-        ["金条"]       = "image/卡通末世物资_金条_20260723024805.png",
+        ["翡翠原石"]   = "image/仓库翡翠原石风格物资_20260813045549_clean.png",
+        ["金条"]       = "image/仓库金条风格物资_20260813045541_clean.png",
         ["钻石项链"]   = "image/卡通末世物资_钻石项链_20260723024811.png",
-        ["古董花瓶"]   = "image/卡通末世物资_古董花瓶_20260723024817.png",
+        ["古董花瓶"]   = "image/仓库古董花瓶风格物资_20260813045540_clean.png",
         ["名牌手包"]   = "image/卡通末世物资_名牌手包_20260723024810.png",
         ["银币收藏"]   = "image/卡通末世物资_银币收藏_20260723024808.png",
         ["红酒82年"]   = "image/卡通末世物资_红酒_20260723024809.png",
         ["珍珠耳环"]   = "image/卡通末世物资_珍珠耳环_20260723024822.png",
         ["象牙雕件"]   = "image/卡通末世物资_象牙雕件_20260723024922.png",
         ["机械键盘"]   = "image/卡通末世物资_机械键盘_20260723024924.png",
-        ["平板电脑"]   = "image/卡通末世物资_平板电脑_20260723024938.png",
+        ["平板电脑"]   = "image/仓库军用平板风格物资_20260813045546_clean.png",
         ["铜戒指"]     = "image/卡通末世物资_铜戒指_20260723024935.png",
         ["旧手机"]     = "image/卡通末世物资_旧手机_20260723024920.png",
         ["打火机"]     = "image/卡通末世物资_打火机_20260723024934.png",
@@ -14363,10 +15126,21 @@ function Start()
         ["二级背包"]   = "image/backpack_tier2_20260718072219.png",
         ["二级安全箱"] = "image/高级战术安全箱_20260731060159.png",
         ["三级安全箱"] = "image/三级红色战术安全箱_20260731125534.png",
+        ["通用战术消音器"] = "image/黑市通用战术消音器_20260809100641.png",
     }
     for name, path in pairs(itemIconPaths) do
         itemIcons[name] = nvgCreateImage(vg, path, 0)
     end
+    blackMarketArt.broker = nvgCreateImage(vg, "image/黑市商人渡鸦肖像_20260809093215.png", 0)
+    blackMarketArt.tunnel_intel = nvgCreateImage(vg, "image/地下管道撤离情报地图_20260809093224.png", 0)
+    blackMarketArt.lab_keycard = nvgCreateImage(vg, "image/伪造实验室门禁卡_20260809093213.png", 0)
+    blackMarketArt.suppressor = nvgCreateImage(vg, "image/黑市通用战术消音器_20260809100641.png", 0)
+    blackMarketArt.weapon_insurance = nvgCreateImage(vg, "image/黑市武器保险券_20260809100637.png", 0)
+    print("[BlackMarket] 专用图片加载: broker=" .. tostring(blackMarketArt.broker)
+        .. " map=" .. tostring(blackMarketArt.tunnel_intel)
+        .. " keycard=" .. tostring(blackMarketArt.lab_keycard)
+        .. " suppressor=" .. tostring(blackMarketArt.suppressor)
+        .. " insurance=" .. tostring(blackMarketArt.weapon_insurance))
     loadProgress = 0.7
     loadStatusText = "正在加载建筑资源..."
     coroutine.yield()
@@ -14410,8 +15184,82 @@ function Start()
     terraceUmbrellaImg = nvgCreateImage(vg, "image/天台遮阳伞_20260602090728.png", 0)
     print("[Scene] 铁网栏=" .. tostring(fenceImg) .. " 路灯=" .. tostring(lampImg))
 
-    -- 加载玩家角色图片
+    -- 加载玩家角色与首页行动终端图片
     playerImg = nvgCreateImage(vg, "image/player_char.png", 0)
+    blackMarketArt.home_crisis = nvgCreateImage(vg, "image/远望日本沦陷城市_20260811103414.png", 0)
+    blackMarketArt.home_survivor = nvgCreateImage(vg,
+        "image/首页空手幸存者立绘_20260811135500.png", 0)
+    blackMarketArt.home_national_map = nvgCreateImage(vg,
+        "image/首页日本全国感染态势图_20260811135348.png", 0)
+    blackMarketArt.home_location = nvgCreateImage(vg,
+        "image/首页东京废弃城区预览_20260811135412.png", 0)
+    blackMarketArt.home_master = nvgCreateImage(vg,
+        "image/首页设计稿母版.png", 0)
+    blackMarketArt.warehouse_master = nvgCreateImage(vg,
+        "image/warehouse/据点仓库设计稿母版.png", 0)
+    blackMarketArt.warehouse_cells = {
+        red2x2 = nvgCreateImage(vg,
+            "image/warehouse/item_cells/物资格_红色传说_2x2.png", 0),
+        gold2x1 = nvgCreateImage(vg,
+            "image/warehouse/item_cells/物资格_金色传说_2x1.png", 0),
+        pink2x2 = nvgCreateImage(vg,
+            "image/warehouse/item_cells/物资格_粉色史诗_2x2.png", 0),
+        purple2x1 = nvgCreateImage(vg,
+            "image/warehouse/item_cells/物资格_紫色稀有_2x1.png", 0),
+        blue1x1 = nvgCreateImage(vg,
+            "image/warehouse/item_cells/物资格_蓝色精良_1x1.png", 0),
+        green1x1 = nvgCreateImage(vg,
+            "image/warehouse/item_cells/物资格_绿色普通_1x1.png", 0),
+    }
+    blackMarketArt.shop_design = {
+        header = nvgCreateImage(vg, "image/shop_design/顶部完整条.png", 0),
+        categories = nvgCreateImage(vg, "image/shop_design/左侧分类金属外框.png", 0),
+        frameTop = nvgCreateImage(vg, "image/shop_design/中央外框顶.png", 0),
+        frameBottom = nvgCreateImage(vg, "image/shop_design/中央外框底.png", 0),
+        frameLeft = nvgCreateImage(vg, "image/shop_design/中央外框左.png", 0),
+        frameRight = nvgCreateImage(vg, "image/shop_design/中央外框右.png", 0),
+        edgeLeft = nvgCreateImage(vg, "image/shop_design/边缘_左.png", 0),
+        categoryGap = nvgCreateImage(vg, "image/shop_design/间隔_分类中央.png", 0),
+        detailGap = nvgCreateImage(vg, "image/shop_design/间隔_中央档案.png", 0),
+        edgeRight = nvgCreateImage(vg, "image/shop_design/边缘_右.png", 0),
+        cardGapOne = nvgCreateImage(vg, "image/shop_design/商品列间隔_一.png", 0),
+        cardGapTwo = nvgCreateImage(vg, "image/shop_design/商品列间隔_二.png", 0),
+        cardRowGap = nvgCreateImage(vg, "image/shop_design/商品行间隔.png", 0),
+        footer = nvgCreateImage(vg, "image/shop_design/底部背景条.png", 0),
+        detailFrame = nvgCreateImage(vg, "image/shop_design/右侧军需档案_动态底板.png", 0),
+        categoryButton = {
+            active = nvgCreateImage(vg, "image/shop_design/sidebar/按钮_选中空白.png", 0),
+            inactive = nvgCreateImage(vg, "image/shop_design/sidebar/按钮_未选中空白.png", 0),
+        },
+        categoryIcons = { active = {}, inactive = {} },
+        cardTemplates = {
+            blue = nvgCreateImage(vg, "image/shop_design/cards/卡片底板_蓝色.png", 0),
+            purple = nvgCreateImage(vg, "image/shop_design/cards/卡片底板_紫色.png", 0),
+            green = nvgCreateImage(vg, "image/shop_design/cards/卡片底板_绿色.png", 0),
+        },
+    }
+    for _, categoryId in ipairs({ "guns", "ammo", "armor", "helmets", "rigs", "backpacks", "safe_boxes" }) do
+        blackMarketArt.shop_design.categoryIcons.active[categoryId] = nvgCreateImage(vg,
+            "image/shop_design/sidebar/图标_深色_" .. categoryId .. ".png", 0)
+        blackMarketArt.shop_design.categoryIcons.inactive[categoryId] = nvgCreateImage(vg,
+            "image/shop_design/sidebar/图标_浅色_" .. categoryId .. ".png", 0)
+    end
+    blackMarketArt.home_layers = {
+        background = nvgCreateImage(vg, "image/home_layers/首页背景_无UI.png", 0),
+        logo = nvgCreateImage(vg, "image/home_layers/首页Logo.png", 0),
+        survivorFrame = nvgCreateImage(vg, "image/home_layers/面板边框_角色.png", 0),
+        mapFrame = nvgCreateImage(vg, "image/home_layers/面板边框_态势地图.png", 0),
+        locationFrame = nvgCreateImage(vg, "image/home_layers/面板边框_地图情报.png", 0),
+        topChip = nvgCreateImage(vg, "image/home_layers/顶部信息条背景.png", 0),
+        navButton = nvgCreateImage(vg, "image/home_layers/底部导航按钮背景.png", 0),
+        equipButton = nvgCreateImage(vg, "image/home_layers/战前整备按钮背景.png", 0),
+        changeMapButton = nvgCreateImage(vg, "image/home_layers/更换地图按钮背景.png", 0),
+        deployButton = nvgCreateImage(vg, "image/home_layers/进入地图按钮背景.png", 0),
+    }
+    print("[Home] 设计稿拆件已加载 主面板="
+        .. tostring(blackMarketArt.home_layers.locationFrame)
+        .. " 母版组件源=" .. tostring(blackMarketArt.home_master)
+        .. " 按钮=" .. tostring(blackMarketArt.home_layers.deployButton))
     if playerImg > 0 then
         print("[Player] 角色图片加载成功")
     else
@@ -14614,13 +15462,20 @@ end
 
 function handleHomeAction(action)
     if action == "equip" then
-        playHomeUISound("equip")
         openLoadoutPanel()
         print("[Home] 打开装备界面")
     elseif action == "deploy" then
         playHomeUISound("deploy")
         confirmLoadout()
         print("[Home] 使用当前装备出战")
+    elseif action == "change-map" then
+        playHomeUISound("tab")
+        HomeUI.SetNotice("当前版本仅开放：东京废弃城区", 2.8)
+        print("[Home] 地图选择：当前仅开放东京废弃城区")
+    elseif action == "blackmarket" then
+        playHomeUISound("tab")
+        openBlackMarketPanel()
+        print("[Home] 打开黑市交易终端")
     elseif action == "shop" then
         playHomeUISound("tab")
         openShopPanel()
@@ -14643,12 +15498,15 @@ function handleHomeAction(action)
 end
 
 function HandleTouchBegin(eventType, eventData)
-    if appState ~= "home" and appState ~= "warehouse" and appState ~= "shop" and appState ~= "codex" then return end
+    if appState ~= "home" and appState ~= "warehouse" and appState ~= "shop"
+        and appState ~= "codex" and appState ~= "blackmarket" then return end
     local touchId = eventData:GetInt("TouchID")
     local x = eventData:GetInt("X") / dpr
     local y = eventData:GetInt("Y") / dpr
     if appState == "home" then
         HomeUI.PointerDown(x, y)
+    elseif appState == "blackmarket" then
+        BlackMarketUI.TouchBegin(touchId, x, y)
     elseif appState == "shop" then
         ShopUI.TouchBegin(touchId, x, y)
     elseif appState == "codex" then
@@ -14659,12 +15517,15 @@ function HandleTouchBegin(eventType, eventData)
 end
 
 function HandleTouchMove(eventType, eventData)
-    if appState ~= "home" and appState ~= "warehouse" and appState ~= "shop" and appState ~= "codex" then return end
+    if appState ~= "home" and appState ~= "warehouse" and appState ~= "shop"
+        and appState ~= "codex" and appState ~= "blackmarket" then return end
     if appState == "home" then return end
     local touchId = eventData:GetInt("TouchID")
     local x = eventData:GetInt("X") / dpr
     local y = eventData:GetInt("Y") / dpr
-    if appState == "shop" then
+    if appState == "blackmarket" then
+        BlackMarketUI.TouchMove(touchId, x, y)
+    elseif appState == "shop" then
         ShopUI.TouchMove(touchId, x, y)
     elseif appState == "codex" then
         CodexUI.TouchMove(touchId, x, y)
@@ -14674,12 +15535,16 @@ function HandleTouchMove(eventType, eventData)
 end
 
 function HandleTouchEnd(eventType, eventData)
-    if appState ~= "home" and appState ~= "warehouse" and appState ~= "shop" and appState ~= "codex" then return end
+    if appState ~= "home" and appState ~= "warehouse" and appState ~= "shop"
+        and appState ~= "codex" and appState ~= "blackmarket" then return end
     local touchId = eventData:GetInt("TouchID")
     local x = eventData:GetInt("X") / dpr
     local y = eventData:GetInt("Y") / dpr
     if appState == "home" then
         handleHomeAction(HomeUI.PointerUp(x, y))
+        return
+    elseif appState == "blackmarket" then
+        handleBlackMarketAction(BlackMarketUI.TouchEnd(touchId, x, y))
         return
     elseif appState == "shop" then
         handleShopAction(ShopUI.TouchEnd(touchId, x, y))
@@ -14698,8 +15563,9 @@ function HandleTouchEnd(eventType, eventData)
         appState = "home"
         HomeUI.Reset()
         print("[Warehouse] 触摸返回据点首页")
-    elseif action == "move" then
-        print("[Warehouse] 触摸拖拽物资完成")
+    elseif action == "move" or action == "upgrade" or action == "rotate" then
+        BlackMarketCloud.MarkDirty("warehouse_" .. action, false)
+        print("[Warehouse] 触摸仓库状态已更新: " .. action)
     end
 end
 
@@ -14709,6 +15575,9 @@ function HandleMouseDown(eventType, eventData)
         local y = eventData:GetInt("Y") / dpr
         if appState == "home" then
             HomeUI.PointerDown(x, y)
+            return
+        elseif appState == "blackmarket" then
+            if not BlackMarketUI.ShouldIgnoreMouse() then BlackMarketUI.PointerDown(x, y) end
             return
         elseif appState == "shop" then
             if not ShopUI.ShouldIgnoreMouse() then ShopUI.PointerDown(x, y) end
@@ -14733,6 +15602,11 @@ function HandleMouseUp(eventType, eventData)
         if appState == "home" then
             handleHomeAction(HomeUI.PointerUp(x, y))
             return
+        elseif appState == "blackmarket" then
+            if not BlackMarketUI.ShouldIgnoreMouse() then
+                handleBlackMarketAction(BlackMarketUI.PointerUp(x, y))
+            end
+            return
         elseif appState == "shop" then
             if not ShopUI.ShouldIgnoreMouse() then
                 handleShopAction(ShopUI.PointerUp(x, y))
@@ -14747,6 +15621,9 @@ function HandleMouseUp(eventType, eventData)
                 appState = "home"
                 HomeUI.Reset()
                 print("[Warehouse] 返回据点首页")
+            elseif action == "move" or action == "upgrade" or action == "rotate" then
+                BlackMarketCloud.MarkDirty("warehouse_" .. action, false)
+                print("[Warehouse] 仓库状态已更新: " .. action)
             end
             return
         elseif appState == "codex" then
@@ -14770,6 +15647,9 @@ function HandleMouseMove(eventType, eventData)
     if appState == "home" then
         HomeUI.PointerMove(x, y)
         return
+    elseif appState == "blackmarket" then
+        if not BlackMarketUI.ShouldIgnoreMouse() then BlackMarketUI.PointerMove(x, y) end
+        return
     elseif appState == "shop" then
         if not ShopUI.ShouldIgnoreMouse() then ShopUI.PointerMove(x, y) end
         return
@@ -14791,6 +15671,9 @@ function HandleMouseMove(eventType, eventData)
 end
 
 function Stop()
+    if BlackMarketCloud.dirty and BlackMarketCloud.loadComplete then
+        BlackMarketCloud.Flush()
+    end
     if vg then nvgDelete(vg); vg = nil end
 end
 
@@ -14842,6 +15725,11 @@ function HandleUpdate(eventType, eventData)
     W = graphics:GetWidth() / dpr
     H = graphics:GetHeight() / dpr
 
+    if BlackMarketCloud.loadComplete and BlackMarketCloud.dirty then
+        BlackMarketCloud.saveDelay = math.max(0, BlackMarketCloud.saveDelay - dt)
+        if BlackMarketCloud.saveDelay <= 0 then BlackMarketCloud.Flush() end
+    end
+
     -- 资源加载阶段：每帧推进加载协程，加载完成前不执行游戏逻辑
     if appState == "loading" then
         gameTime = gameTime + dt  -- 供加载界面旋转动画使用
@@ -14875,7 +15763,18 @@ function HandleUpdate(eventType, eventData)
                 end
             )
         end
-        if downloadsComplete then
+        if downloadsComplete and not BlackMarketCloud.loadStarted then
+            BlackMarketCloud.BeginLoad()
+        end
+        if BlackMarketCloud.loadStarted and not BlackMarketCloud.loadComplete then
+            BlackMarketCloud.loadElapsed = BlackMarketCloud.loadElapsed + dt
+            if BlackMarketCloud.loadElapsed >= BlackMarketCloud.LOAD_TIMEOUT then
+                BlackMarketCloud.loadComplete = true
+                loadStatusText = "加载完成"
+                print("[Cloud] 黑市档案读取超时，继续使用默认档案")
+            end
+        end
+        if downloadsComplete and BlackMarketCloud.loadComplete then
             appState = "home"
             HomeUI.Reset()
             if joystick_ then joystick_._shouldShow = false end
@@ -14885,6 +15784,8 @@ function HandleUpdate(eventType, eventData)
         end
         return
     end
+
+    updateBlackMarketRefresh(dt)
 
     if appState == "home" then
         gameTime = gameTime + dt
@@ -14917,6 +15818,14 @@ function HandleUpdate(eventType, eventData)
                 playHomeUISound("deploy")
                 confirmLoadout()
                 print("[Home] 触摸使用当前装备出战")
+            elseif action == "change-map" then
+                playHomeUISound("tab")
+                HomeUI.SetNotice("当前版本仅开放：东京废弃城区", 2.8)
+                print("[Home] 触摸地图选择：当前仅开放东京废弃城区")
+            elseif action == "blackmarket" then
+                playHomeUISound("tab")
+                openBlackMarketPanel()
+                print("[Home] 触摸打开黑市交易终端")
             elseif action == "shop" then
                 playHomeUISound("tab")
                 openShopPanel()
@@ -15002,6 +15911,29 @@ function HandleUpdate(eventType, eventData)
             lootUI._touchLoadoutConfirm = false
             lootUI._touchDragStarted = false
             lootUI._touchHitItem = false
+        end
+        return
+    end
+
+    if appState == "blackmarket" then
+        gameTime = gameTime + dt
+        BlackMarketUI.Update(dt)
+        if joystick_ then joystick_._shouldShow = false end
+        if descendBtn_ then descendBtn_._shouldShow = false end
+        if doorBtn_ then doorBtn_._shouldShow = false end
+        if upBtn_ then upBtn_._shouldShow = false end
+        if downBtn_ then downBtn_._shouldShow = false end
+        if lootBtn_ then lootBtn_._shouldShow = false end
+
+        local wheel = input:GetMouseMoveWheel()
+        if wheel ~= 0 then
+            local mousePos = input:GetMousePosition()
+            BlackMarketUI.ScrollAt(mousePos.x / dpr, mousePos.y / dpr, -wheel * 34)
+        end
+        if input:GetKeyPress(KEY_ESCAPE) then
+            appState = "home"
+            HomeUI.Reset()
+            print("[BlackMarket] 键盘返回据点首页")
         end
         return
     end
@@ -16327,6 +17259,19 @@ function HandleNanoVGRender(eventType, eventData)
         local homeData = {
             bits = lootUI and lootUI.bits or "12,840",
             playerImage = playerImg,
+            crisisImage = blackMarketArt.home_crisis,
+            survivorImage = blackMarketArt.home_survivor,
+            nationalMapImage = blackMarketArt.home_national_map,
+            locationImage = blackMarketArt.home_location,
+            masterImage = blackMarketArt.home_master,
+            layers = blackMarketArt.home_layers,
+            selectedMapName = "东京废弃城区",
+            shelterLevel = 6,
+            survivorCount = "42 / 60",
+            playerLevel = 18,
+            playerExp = "3260 / 7200",
+            health = "100 / 100",
+            reputation = tostring(blackMarketReputation or 3250) .. " / 6000",
             inventoryCount = #playerInventory,
             inventoryCapacity = INVENTORY_MAX,
         }
@@ -16336,10 +17281,35 @@ function HandleNanoVGRender(eventType, eventData)
         return
     end
 
+    if appState == "blackmarket" then
+        BlackMarketUI.Draw(vg, W, H, {
+            bits = lootUI.bits,
+            reputation = blackMarketReputation,
+            itemIcons = itemIcons,
+            itemRarity = ITEM_RARITY,
+            itemSizes = ITEM_SIZES,
+            itemValues = lootUI.itemValues,
+            warehouseTabs = warehouseTabs,
+            art = blackMarketArt,
+            marketRates = blackMarketRates,
+            refreshRemaining = blackMarketRefreshRemaining,
+            orders = blackMarketOrders,
+            merchantStock = blackMarketMerchantStock,
+            countWarehouseItem = countWarehouseItem,
+            history = blackMarketHistory,
+        })
+        nvgRestore(vg)
+        nvgEndFrame(vg)
+        return
+    end
+
     if appState == "shop" then
         ShopUI.Draw(vg, W, H, {
             bits = lootUI.bits,
             itemIcons = itemIcons,
+            backgroundImage = blackMarketArt.home_layers.background,
+            cellImages = blackMarketArt.warehouse_cells,
+            designImages = blackMarketArt.shop_design,
         })
         nvgRestore(vg)
         nvgEndFrame(vg)
@@ -16352,6 +17322,8 @@ function HandleNanoVGRender(eventType, eventData)
             itemRarity = ITEM_RARITY,
             itemSizes = ITEM_SIZES,
             itemValues = lootUI.itemValues,
+            masterImage = blackMarketArt.warehouse_master,
+            cellImages = blackMarketArt.warehouse_cells,
         }
         WarehouseUI.Draw(vg, W, H, warehouseData)
         nvgRestore(vg)

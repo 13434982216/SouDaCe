@@ -6,6 +6,8 @@ local WarehouseUI = {
     tabRects = {},
     gridRects = {},
     gridCellSize = 0,
+    gridCellW = 0,
+    gridCellH = 0,
     cellRects = {},
     gridViewport = nil,
     scrollOffset = 0,
@@ -44,6 +46,12 @@ local WarehouseUI = {
     notice = "",
     noticeTimer = 0,
     infoPopup = nil,
+    selectedItemIndex = 1,
+    rotateRect = nil,
+    organizeRect = nil,
+    layoutScale = 1,
+    layoutOffsetX = 0,
+    layoutOffsetY = 0,
 }
 
 local RARITY_COLORS = {
@@ -54,6 +62,141 @@ local RARITY_COLORS = {
     blue = { 54, 106, 166 },
     green = { 57, 125, 79 },
 }
+
+local DESIGN_W = 1365
+local DESIGN_H = 768
+
+local CELL_COLORS = {
+    red = { 91, 39, 29 },
+    pink = { 83, 57, 75 },
+    gold = { 104, 83, 39 },
+    purple = { 64, 48, 77 },
+    blue = { 43, 62, 72 },
+    green = { 56, 68, 44 },
+}
+
+local function beginWarehouseCellPath(ctx, x, y, w, h, inset)
+    local gap = inset or 0
+    local left = x + gap
+    local top = y + gap
+    local right = x + w - gap
+    local bottom = y + h - gap
+    local cut = math.min(5, math.max(2, (right - left) * 0.035),
+        math.max(2, (bottom - top) * 0.12))
+    nvgBeginPath(ctx)
+    nvgMoveTo(ctx, left + cut, top)
+    nvgLineTo(ctx, right - cut, top)
+    nvgLineTo(ctx, right, top + cut)
+    nvgLineTo(ctx, right, bottom - cut)
+    nvgLineTo(ctx, right - cut, bottom)
+    nvgLineTo(ctx, left + cut, bottom)
+    nvgLineTo(ctx, left, bottom - cut)
+    nvgLineTo(ctx, left, top + cut)
+    nvgClosePath(ctx)
+end
+
+local WAREHOUSE_MASTER_CROPS = {
+    ["翡翠原石"] = { x = 50, y = 148, w = 211, h = 230 },
+    ["金条"] = { x = 544, y = 148, w = 186, h = 153 },
+    ["古董花瓶"] = { x = 731, y = 148, w = 170, h = 230 },
+    ["平板电脑"] = { x = 474, y = 455, w = 212, h = 77 },
+}
+
+local function drawMasterCrop(ctx, master, source, rect)
+    if not master or master <= 0 or not source then return false end
+    local scaleX = rect.w / source.w
+    local scaleY = rect.h / source.h
+    local imageX = rect.x - source.x * scaleX
+    local imageY = rect.y - source.y * scaleY
+    local imageW = DESIGN_W * scaleX
+    local imageH = DESIGN_H * scaleY
+    local paint = nvgImagePattern(ctx, imageX, imageY, imageW, imageH, 0, master, 1.0)
+    nvgSave(ctx)
+    nvgScissor(ctx, rect.x, rect.y, rect.w, rect.h)
+    nvgBeginPath(ctx)
+    nvgRect(ctx, rect.x, rect.y, rect.w, rect.h)
+    nvgFillPaint(ctx, paint)
+    nvgFill(ctx)
+    nvgRestore(ctx)
+    return true
+end
+
+local WAREHOUSE_CELL_KEYS = {
+    ["翡翠原石"] = "red2x2",
+    ["金条"] = "gold2x1",
+    ["古董花瓶"] = "pink2x2",
+    ["平板电脑"] = "purple2x1",
+}
+
+local WAREHOUSE_RARITY_CELL_KEYS = {
+    red = "red2x2",
+    gold = "gold2x1",
+    pink = "pink2x2",
+    purple = "purple2x1",
+    blue = "blue1x1",
+    green = "green1x1",
+}
+
+local function drawWarehouseCellImage(ctx, image, rect, selected)
+    if not image or image <= 0 then return false end
+    local paint = nvgImagePattern(ctx, rect.x, rect.y, rect.w, rect.h, 0, image, 1.0)
+    nvgBeginPath(ctx)
+    nvgRect(ctx, rect.x, rect.y, rect.w, rect.h)
+    nvgFillPaint(ctx, paint)
+    nvgFill(ctx)
+    if selected then
+        nvgBeginPath(ctx)
+        nvgRect(ctx, rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2)
+        nvgStrokeColor(ctx, nvgRGBA(229, 210, 158, 245))
+        nvgStrokeWidth(ctx, 2)
+        nvgStroke(ctx)
+    end
+    return true
+end
+
+local function drawWarehouseItemCell(ctx, rect, color, selected)
+    local dark = {
+        math.floor(color[1] * 0.42),
+        math.floor(color[2] * 0.42),
+        math.floor(color[3] * 0.42),
+    }
+    beginWarehouseCellPath(ctx, rect.x, rect.y, rect.w, rect.h, 0)
+    nvgFillColor(ctx, nvgRGBA(31, 29, 22, 255))
+    nvgFill(ctx)
+    nvgStrokeColor(ctx, nvgRGBA(107, 95, 67, 235))
+    nvgStrokeWidth(ctx, selected and 2.2 or 1.4)
+    nvgStroke(ctx)
+    local inner = nvgLinearGradient(ctx, rect.x, rect.y, rect.x, rect.y + rect.h,
+        nvgRGBA(color[1], color[2], color[3], 244),
+        nvgRGBA(dark[1], dark[2], dark[3], 250))
+    beginWarehouseCellPath(ctx, rect.x + 4, rect.y + 4, rect.w - 8, rect.h - 8, 0)
+    nvgFillPaint(ctx, inner)
+    nvgFill(ctx)
+    beginWarehouseCellPath(ctx, rect.x + 4, rect.y + 4, rect.w - 8, rect.h - 8, 0)
+    nvgStrokeColor(ctx, selected
+        and nvgRGBA(225, 205, 151, 255)
+        or nvgRGBA(139, 123, 84, 210))
+    nvgStrokeWidth(ctx, 1)
+    nvgStroke(ctx)
+end
+
+local function screenToDesign(x, y)
+    local scale = math.max(0.0001, WarehouseUI.layoutScale or 1)
+    return (x - (WarehouseUI.layoutOffsetX or 0)) / scale,
+        (y - (WarehouseUI.layoutOffsetY or 0)) / scale
+end
+
+local function drawImageRect(ctx, image, x, y, w, h, tint)
+    if not image or image <= 0 then return false end
+    local paint = tint
+        and nvgImagePatternTinted(ctx, x, y, w, h, 0, image, tint)
+        or nvgImagePattern(ctx, x, y, w, h, 0, image, 1.0)
+    nvgBeginPath(ctx)
+    nvgRect(ctx, x, y, w, h)
+    nvgFillPaint(ctx, paint)
+    nvgFill(ctx)
+    return true
+end
 
 local function clamp(value, minValue, maxValue)
     return math.max(minValue, math.min(maxValue, value))
@@ -482,35 +625,46 @@ local function drawItem(ctx, rect, entry, data, index, registerHit, ghost)
     local color = RARITY_COLORS[rarity] or RARITY_COLORS.green
     local iconId = data.itemIcons and data.itemIcons[itemName]
     local isDragging = WarehouseUI.dragging and WarehouseUI.dragIndex == index
+    local isSelected = WarehouseUI.selectedItemIndex == index
     local hideIcon = isDragging and not ghost
 
-    nvgBeginPath(ctx)
-    nvgRoundedRect(ctx, rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2, 4)
-    local itemGrad = nvgBoxGradient(ctx, rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2,
-        4, math.max(12, rect.w * 0.38),
-        nvgRGBA(math.floor(color[1] * 0.38), math.floor(color[2] * 0.38), math.floor(color[3] * 0.38), 252),
-        nvgRGBA(color[1], color[2], color[3], 200))
-    nvgFillPaint(ctx, itemGrad)
-    nvgFill(ctx)
+    local cellColor = CELL_COLORS[rarity] or CELL_COLORS.green
+    local cellKey = WAREHOUSE_CELL_KEYS[itemName]
+        or WAREHOUSE_RARITY_CELL_KEYS[rarity]
+        or "green1x1"
+    local cellImage = data.cellImages and data.cellImages[cellKey]
+    local hasExactCell = cellImage and cellImage > 0
+    if hasExactCell then
+        drawWarehouseCellImage(ctx, cellImage, rect, isSelected)
+    else
+        drawWarehouseItemCell(ctx, rect, cellColor, isSelected)
+    end
 
-    nvgBeginPath(ctx)
-    nvgRoundedRect(ctx, rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2, 4)
-    nvgStrokeColor(ctx, nvgRGBA(color[1], color[2], color[3], isDragging and 255 or 235))
-    nvgStrokeWidth(ctx, isDragging and 2.2 or 1.3)
-    nvgStroke(ctx)
-
+    local nameBarH = math.min(22, math.max(16, rect.h * 0.28))
+    local nameBarY = rect.y + rect.h - nameBarH
     if iconId and iconId > 0 and not hideIcon then
         local vertical = type(entry) == "table" and entry.orientation == "vertical"
         local sourceW, sourceH = nvgImageSize(ctx, iconId)
         sourceW = math.max(1, sourceW or 1)
         sourceH = math.max(1, sourceH or 1)
-        -- 独立据点仓库使用更克制的长武器比例，避免裁边后的图标撑满物资格。
         local imageScale = (itemName == "棒球棍" or itemName == "散弹枪") and 0.82 or 1.0
-        local targetW = rect.w * 1.14 * imageScale
-        local targetH = rect.h * 0.98 * imageScale
+        local itemW, itemH = getItemSize(entry)
+        local isSingleCell = itemW == 1 and itemH == 1
+        local targetW = rect.w * 0.72 * imageScale
+        local targetH = math.max(12, rect.h - nameBarH - 8) * 0.82 * imageScale
+        if isSingleCell then
+            targetW = rect.w * 0.94
+            targetH = math.max(12, rect.h - nameBarH - 2) * 0.98
+        end
+        local centerX = rect.x + rect.w * 0.5
+        local centerY = rect.y + (rect.h - nameBarH) * 0.5
+        if not hasExactCell then
+            targetW = rect.w * 1.14 * imageScale
+            targetH = rect.h * 0.98 * imageScale
+        end
         if vertical then
-            targetW = rect.h * 1.14 * imageScale
-            targetH = rect.w * 0.98 * imageScale
+            targetW = (hasExactCell and math.max(12, rect.h - nameBarH - 8) or rect.h) * 1.14 * imageScale
+            targetH = (hasExactCell and rect.w * 0.72 or rect.w * 0.98) * imageScale
         end
         local imageAspect = sourceW / sourceH
         local targetAspect = targetW / targetH
@@ -523,30 +677,30 @@ local function drawItem(ctx, rect, entry, data, index, registerHit, ghost)
             drawH = targetH
             drawW = targetH * imageAspect
         end
+        nvgSave(ctx)
+        nvgIntersectScissor(ctx, rect.x, rect.y, rect.w, math.max(1, nameBarY - rect.y))
         if vertical then
-            nvgSave(ctx)
-            nvgTranslate(ctx, rect.x + rect.w * 0.5, rect.y + rect.h * 0.5)
+            nvgTranslate(ctx, centerX, centerY)
             nvgRotate(ctx, math.pi * 0.5)
-            local paint = nvgImagePattern(ctx, -drawW * 0.5, -drawH * 0.5, drawW, drawH, 0, iconId, 1.0)
+            local paint = nvgImagePattern(ctx, -drawW * 0.5, -drawH * 0.5,
+                drawW, drawH, 0, iconId, 1.0)
             nvgBeginPath(ctx)
             nvgRect(ctx, -drawW * 0.5, -drawH * 0.5, drawW, drawH)
             nvgFillPaint(ctx, paint)
             nvgFill(ctx)
-            nvgRestore(ctx)
         else
-            local iconX = rect.x + (rect.w - drawW) * 0.5
-            local iconY = rect.y + (rect.h - drawH) * 0.5
+            local iconX = centerX - drawW * 0.5
+            local iconY = centerY - drawH * 0.5
             local paint = nvgImagePattern(ctx, iconX, iconY, drawW, drawH, 0, iconId, 1.0)
             nvgBeginPath(ctx)
             nvgRect(ctx, iconX, iconY, drawW, drawH)
             nvgFillPaint(ctx, paint)
             nvgFill(ctx)
         end
+        nvgRestore(ctx)
     end
 
     nvgFontFace(ctx, "sans")
-    local nameBarH = math.min(22, math.max(16, rect.h * 0.28))
-    local nameBarY = rect.y + rect.h - nameBarH
     local textSize = clamp(rect.w * 0.115, 5, 8)
     local availableTextW = math.max(1, rect.w - 14)
     nvgFontSize(ctx, textSize)
@@ -560,7 +714,8 @@ local function drawItem(ctx, rect, entry, data, index, registerHit, ghost)
     nvgFillColor(ctx, nvgRGBA(0, 0, 0, 105))
     nvgFill(ctx)
     nvgSave(ctx)
-    nvgIntersectScissor(ctx, rect.x + 1, nameBarY, math.max(1, rect.w - 2), nameBarH)
+    nvgIntersectScissor(ctx, rect.x + 1, nameBarY,
+        math.max(1, rect.w - 2), nameBarH)
     nvgTextAlign(ctx, NVG_ALIGN_CENTER + NVG_ALIGN_TOP)
     nvgFillColor(ctx, nvgRGBA(245, 239, 219, 250))
     nvgText(ctx, rect.x + rect.w * 0.5, nameBarY + 3, itemName)
@@ -577,10 +732,9 @@ local function drawGrid(ctx, x, y, w, h, tab, data)
     local scrollbarW = 18
     local viewportW = math.max(40, w - scrollbarW)
     local cellW = viewportW / cols
-    -- 单格宽度严格适配横向视口，确保手机横屏下首尾列不会溢出后被裁切。
-    local cellSize = math.max(1, cellW)
-    local contentW = cellSize * cols
-    local contentH = cellSize * rows
+    local cellH = 76
+    local contentW = cellW * cols
+    local contentH = cellH * rows
     local maxScroll = math.max(0, contentH - h)
     WarehouseUI.scrollMax = maxScroll
     WarehouseUI.scrollOffset = clamp(WarehouseUI.scrollOffset, 0, maxScroll)
@@ -588,7 +742,9 @@ local function drawGrid(ctx, x, y, w, h, tab, data)
     local startX = x + (viewportW - contentW) * 0.5
     local startY = y - WarehouseUI.scrollOffset
     WarehouseUI.gridRects = {}
-    WarehouseUI.gridCellSize = cellSize
+    WarehouseUI.gridCellSize = math.min(cellW, cellH)
+    WarehouseUI.gridCellW = cellW
+    WarehouseUI.gridCellH = cellH
     WarehouseUI.cellRects = {}
     WarehouseUI.itemRects = {}
     WarehouseUI.itemSizes = data.itemSizes or WarehouseUI.itemSizes or {}
@@ -603,10 +759,10 @@ local function drawGrid(ctx, x, y, w, h, tab, data)
         for col = 1, cols do
             local index = (row - 1) * cols + col
             local rect = {
-                x = startX + (col - 1) * cellSize,
-                y = startY + (row - 1) * cellSize,
-                w = cellSize,
-                h = cellSize,
+                x = startX + (col - 1) * cellW,
+                y = startY + (row - 1) * cellH,
+                w = cellW,
+                h = cellH,
             }
             local occupied = isCellOccupied(tab, index)
             nvgBeginPath(ctx)
@@ -631,8 +787,8 @@ local function drawGrid(ctx, x, y, w, h, tab, data)
                 local rect = {
                     x = anchor.x,
                     y = anchor.y,
-                    w = placement.w * cellSize,
-                    h = placement.h * cellSize,
+                    w = placement.w * cellW,
+                    h = placement.h * cellH,
                 }
                 drawItem(ctx, rect, entry, data, index, true, false)
             end
@@ -643,8 +799,8 @@ local function drawGrid(ctx, x, y, w, h, tab, data)
         local entry = tab.items[WarehouseUI.dragIndex]
         if entry then
             local itemW, itemH = getItemSize(entry)
-            local anchorX = WarehouseUI.dragX - WarehouseUI.dragOffsetX + cellSize * 0.5
-            local anchorY = WarehouseUI.dragY - WarehouseUI.dragOffsetY + cellSize * 0.5
+            local anchorX = WarehouseUI.dragX - WarehouseUI.dragOffsetX + cellW * 0.5
+            local anchorY = WarehouseUI.dragY - WarehouseUI.dragOffsetY + cellH * 0.5
             local targetCell = nil
             for index, cellRect in ipairs(WarehouseUI.cellRects) do
                 if pointInRect(anchorX, anchorY, cellRect) then
@@ -658,8 +814,8 @@ local function drawGrid(ctx, x, y, w, h, tab, data)
                 local targetRow = math.floor((targetCell - 1) / cols) + 1
                 local targetAnchor = WarehouseUI.cellRects[targetCell]
                 local canDrop = placementFits(tab, targetCol, targetRow, itemW, itemH, WarehouseUI.dragIndex)
-                local previewW = itemW * cellSize
-                local previewH = itemH * cellSize
+                local previewW = itemW * cellW
+                local previewH = itemH * cellH
                 local previewR = canDrop and 66 or 194
                 local previewG = canDrop and 174 or 67
                 local previewB = canDrop and 101 or 58
@@ -681,10 +837,10 @@ local function drawGrid(ctx, x, y, w, h, tab, data)
                     for previewCol = 0, itemW - 1 do
                         nvgBeginPath(ctx)
                         nvgRect(ctx,
-                            targetAnchor.x + previewCol * cellSize + 3,
-                            targetAnchor.y + previewRow * cellSize + 3,
-                            cellSize - 6,
-                            cellSize - 6)
+                            targetAnchor.x + previewCol * cellW + 3,
+                            targetAnchor.y + previewRow * cellH + 3,
+                            cellW - 6,
+                            cellH - 6)
                         nvgStrokeColor(ctx, nvgRGBA(previewR, previewG, previewB, 150))
                         nvgStrokeWidth(ctx, 1)
                         nvgStroke(ctx)
@@ -695,8 +851,8 @@ local function drawGrid(ctx, x, y, w, h, tab, data)
             local ghost = {
                 x = WarehouseUI.dragX - WarehouseUI.dragOffsetX,
                 y = WarehouseUI.dragY - WarehouseUI.dragOffsetY,
-                w = itemW * cellSize,
-                h = itemH * cellSize,
+                w = itemW * cellW,
+                h = itemH * cellH,
             }
             nvgSave(ctx)
             drawItem(ctx, ghost, entry, data, WarehouseUI.dragIndex, false, true)
@@ -845,6 +1001,131 @@ local function drawUpgradePanel(ctx, x, y, w, h, tab, data)
         atMax and "已满级" or (canUpgrade and "升级扩大仓库" or "材料不足"))
 end
 
+local function organizeTab(tab)
+    for index, entry in ipairs(tab.items or {}) do
+        tab.items[index] = {
+            item = getItemName(entry),
+            orientation = type(entry) == "table" and entry.orientation or nil,
+        }
+    end
+    rebuildPlacements(tab)
+end
+
+local function drawArchivePanel(ctx, tab, data)
+    local selectedIndex = clamp(WarehouseUI.selectedItemIndex or 1, 1,
+        math.max(1, #(tab.items or {})))
+    WarehouseUI.selectedItemIndex = selectedIndex
+    local entry = tab.items and tab.items[selectedIndex]
+    local itemName = entry and getItemName(entry) or "暂无物资"
+    local info = getItemInfo(itemName, data)
+    local rarity = (data.itemRarity and data.itemRarity[itemName]) or "green"
+    local color = RARITY_COLORS[rarity] or RARITY_COLORS.green
+    local iconId = data.itemIcons and data.itemIcons[itemName]
+    local itemW, itemH = 1, 1
+    if entry then itemW, itemH = getItemSize(entry) end
+
+    -- 覆盖设计稿示例档案内容，保留外部金属框与标题胶带。
+    nvgBeginPath(ctx)
+    nvgRect(ctx, 1014, 153, 313, 447)
+    nvgFillColor(ctx, nvgRGBA(208, 199, 171, 255))
+    nvgFill(ctx)
+    local paper = nvgLinearGradient(ctx, 1014, 153, 1327, 600,
+        nvgRGBA(229, 220, 191, 245), nvgRGBA(190, 179, 148, 245))
+    nvgBeginPath(ctx)
+    nvgRect(ctx, 1022, 160, 297, 432)
+    nvgFillPaint(ctx, paper)
+    nvgFill(ctx)
+    nvgBeginPath(ctx)
+    nvgRect(ctx, 1022, 160, 297, 432)
+    nvgStrokeColor(ctx, nvgRGBA(68, 61, 46, 230))
+    nvgStrokeWidth(ctx, 2)
+    nvgStroke(ctx)
+
+    nvgBeginPath(ctx)
+    nvgRect(ctx, 1030, 169, 281, 194)
+    nvgFillColor(ctx, nvgRGBA(201, 194, 170, 255))
+    nvgFill(ctx)
+    nvgBeginPath(ctx)
+    nvgRect(ctx, 1030, 169, 281, 194)
+    nvgStrokeColor(ctx, nvgRGBA(106, 96, 73, 210))
+    nvgStrokeWidth(ctx, 1.5)
+    nvgStroke(ctx)
+
+    if iconId and iconId > 0 then
+        local sourceW, sourceH = nvgImageSize(ctx, iconId)
+        sourceW = math.max(1, sourceW or 1)
+        sourceH = math.max(1, sourceH or 1)
+        local maxW, maxH = 220, 174
+        local drawW, drawH = maxW, maxW * sourceH / sourceW
+        if drawH > maxH then
+            drawH = maxH
+            drawW = maxH * sourceW / sourceH
+        end
+        local imageX = 1170.5 - drawW * 0.5
+        local imageY = 266 - drawH * 0.5
+        local paint = nvgImagePattern(ctx, imageX, imageY, drawW, drawH, 0, iconId, 1.0)
+        nvgBeginPath(ctx)
+        nvgRect(ctx, imageX, imageY, drawW, drawH)
+        nvgFillPaint(ctx, paint)
+        nvgFill(ctx)
+    end
+
+    nvgFontFace(ctx, "sans")
+    nvgTextAlign(ctx, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
+    nvgFillColor(ctx, nvgRGBA(32, 29, 23, 255))
+    nvgFontSize(ctx, 21)
+    nvgText(ctx, 1028, 375, itemName)
+    nvgFontSize(ctx, 17)
+    nvgText(ctx, 1028, 408, "品质：" .. getRarityLabel(rarity))
+    nvgFillColor(ctx, nvgRGBA(color[1], color[2], color[3], 255))
+    nvgText(ctx, 1122, 408, "■")
+    nvgFillColor(ctx, nvgRGBA(32, 29, 23, 255))
+    nvgText(ctx, 1028, 436, "大小：" .. tostring(itemW) .. "×" .. tostring(itemH))
+    nvgText(ctx, 1028, 464, "价值：" .. tostring(info.value or 0))
+    nvgFontSize(ctx, 15)
+    local desc = tostring(info.desc or "暂无物品说明。")
+    nvgTextBox(ctx, 1028, 497, 278, desc)
+end
+
+local function drawDesignTabs(ctx)
+    local rects = {
+        { x = 68, y = 94, w = 180, h = 47 },
+        { x = 271, y = 92, w = 177, h = 49 },
+        { x = 470, y = 92, w = 177, h = 49 },
+    }
+    WarehouseUI.tabRects = {}
+    for index, rect in ipairs(rects) do
+        WarehouseUI.tabRects[index] = rect
+        if index == WarehouseUI.activeTab then
+            nvgBeginPath(ctx)
+            nvgRect(ctx, rect.x + 3, rect.y + 3, rect.w - 6, rect.h - 6)
+            nvgFillColor(ctx, nvgRGBA(111, 105, 66, 42))
+            nvgFill(ctx)
+        end
+    end
+end
+
+local function drawDesignButtons(ctx)
+    WarehouseUI.rotateRect = { x = 1010, y = 625, w = 96, h = 127 }
+    WarehouseUI.organizeRect = { x = 1117, y = 625, w = 100, h = 127 }
+    WarehouseUI.upgradeRect = { x = 1228, y = 625, w = 108, h = 127 }
+    local actions = {
+        { id = "rotate", rect = WarehouseUI.rotateRect },
+        { id = "organize", rect = WarehouseUI.organizeRect },
+        { id = "upgrade", rect = WarehouseUI.upgradeRect },
+    }
+    for _, action in ipairs(actions) do
+        if WarehouseUI.hovered == action.id or WarehouseUI.pressed == action.id then
+            nvgBeginPath(ctx)
+            nvgRect(ctx, action.rect.x + 4, action.rect.y + 4,
+                action.rect.w - 8, action.rect.h - 8)
+            nvgFillColor(ctx, nvgRGBA(225, 201, 139,
+                WarehouseUI.pressed == action.id and 42 or 24))
+            nvgFill(ctx)
+        end
+    end
+end
+
 function WarehouseUI.Open(tabs)
     WarehouseUI.tabs = tabs or WarehouseUI.tabs
     WarehouseUI.activeTab = 1
@@ -859,6 +1140,7 @@ function WarehouseUI.Open(tabs)
     WarehouseUI.ignoreMouseTimer = 0
     WarehouseUI.notice = ""
     WarehouseUI.noticeTimer = 0
+    WarehouseUI.selectedItemIndex = 1
 end
 
 function WarehouseUI.Update(dt)
@@ -890,6 +1172,8 @@ function WarehouseUI.GetHit(x, y)
     if pointInRect(x, y, WarehouseUI.scrollThumbHitRect) then return "scroll-thumb" end
     if pointInRect(x, y, WarehouseUI.scrollBarHitRect) then return "scrollbar" end
     if pointInRect(x, y, WarehouseUI.backRect) then return "back" end
+    if pointInRect(x, y, WarehouseUI.rotateRect) then return "rotate" end
+    if pointInRect(x, y, WarehouseUI.organizeRect) then return "organize" end
     if pointInRect(x, y, WarehouseUI.upgradeRect) then return "upgrade" end
     for index, rect in ipairs(WarehouseUI.tabRects) do
         if pointInRect(x, y, rect) then return "tab:" .. tostring(index) end
@@ -904,6 +1188,7 @@ function WarehouseUI.GetHit(x, y)
 end
 
 function WarehouseUI.PointerMove(x, y)
+    x, y = screenToDesign(x, y)
     if WarehouseUI.scrollDragging then
         local thumb = WarehouseUI.scrollThumbRect
         local bar = WarehouseUI.scrollBarRect
@@ -953,6 +1238,7 @@ function WarehouseUI.PointerMove(x, y)
 end
 
 function WarehouseUI.PointerDown(x, y)
+    x, y = screenToDesign(x, y)
     if WarehouseUI.infoPopup then
         if pointInRect(x, y, WarehouseUI.popupRotateRect) then
             WarehouseUI.pressed = "popup-rotate"
@@ -1041,6 +1327,7 @@ function WarehouseUI.ShouldIgnoreMouse()
 end
 
 function WarehouseUI.PointerUp(x, y)
+    x, y = screenToDesign(x, y)
     if WarehouseUI.scrollDragging then
         WarehouseUI.scrollDragging = false
         WarehouseUI.scrollFromGrid = false
@@ -1082,9 +1369,10 @@ function WarehouseUI.PointerUp(x, y)
             return "move"
         end
 
-        local cellSize = math.max(1, WarehouseUI.gridCellSize)
-        local anchorX = x - WarehouseUI.dragOffsetX + cellSize * 0.5
-        local anchorY = y - WarehouseUI.dragOffsetY + cellSize * 0.5
+        local cellW = math.max(1, WarehouseUI.gridCellW)
+        local cellH = math.max(1, WarehouseUI.gridCellH)
+        local anchorX = x - WarehouseUI.dragOffsetX + cellW * 0.5
+        local anchorY = y - WarehouseUI.dragOffsetY + cellH * 0.5
         local cellIndex = getDropCellAt(anchorX, anchorY)
         local tab = getTab()
         if cellIndex and tab and canPlaceItem(tab, dragIndex, cellIndex) then
@@ -1125,21 +1413,8 @@ function WarehouseUI.PointerUp(x, y)
 
     local itemIndex = tonumber(action:match("^item:(%d+)$"))
     if itemIndex then
-        local tab = getTab()
-        local entry = tab and tab.items and tab.items[itemIndex]
-        local placement = WarehouseUI.placements[itemIndex]
-        if entry and placement then
-            local itemName = getItemName(entry)
-            WarehouseUI.infoPopup = {
-                itemName = itemName,
-                itemIndex = itemIndex,
-                rarity = WarehouseUI.itemRarity[itemName] or "green",
-                wCells = placement.w,
-                hCells = placement.h,
-                anchorX = WarehouseUI.dragStartX,
-                anchorY = WarehouseUI.dragStartY,
-            }
-        end
+        WarehouseUI.selectedItemIndex = itemIndex
+        WarehouseUI.infoPopup = nil
         return "item-info"
     end
 
@@ -1149,6 +1424,7 @@ function WarehouseUI.PointerUp(x, y)
         local tab = WarehouseUI.tabs[index]
         if tab and tab.unlocked then
             WarehouseUI.activeTab = index
+            WarehouseUI.selectedItemIndex = 1
             WarehouseUI.scrollOffset = 0
             WarehouseUI.infoPopup = nil
             WarehouseUI.notice = ""
@@ -1158,6 +1434,31 @@ function WarehouseUI.PointerUp(x, y)
             WarehouseUI.noticeTimer = 1.8
         end
         return "tab"
+    end
+
+    if action == "rotate" then
+        local tab = getTab()
+        local itemIndex = WarehouseUI.selectedItemIndex or 1
+        if tab and tab.items[itemIndex] and rotateItem(tab, itemIndex) then
+            WarehouseUI.notice = "物品已旋转"
+            WarehouseUI.noticeTimer = 1.2
+        else
+            WarehouseUI.notice = "请选择可旋转且有足够空间的物品"
+            WarehouseUI.noticeTimer = 1.8
+        end
+        return "rotate"
+    end
+
+    if action == "organize" then
+        local tab = getTab()
+        if tab then
+            organizeTab(tab)
+            WarehouseUI.selectedItemIndex = clamp(WarehouseUI.selectedItemIndex or 1,
+                1, math.max(1, #(tab.items or {})))
+            WarehouseUI.notice = "仓库整理完成"
+            WarehouseUI.noticeTimer = 1.4
+        end
+        return "move"
     end
 
     if action == "upgrade" then
@@ -1194,55 +1495,78 @@ function WarehouseUI.Draw(ctx, width, height, data)
     local tab = getTab()
     if not tab then return end
 
-    local bg = nvgLinearGradient(ctx, 0, 0, width, height,
-        nvgRGBA(27, 31, 33, 255), nvgRGBA(8, 10, 12, 255))
+    local scale = math.min(width / DESIGN_W, height / DESIGN_H)
+    local drawW = DESIGN_W * scale
+    local drawH = DESIGN_H * scale
+    local offsetX = (width - drawW) * 0.5
+    local offsetY = (height - drawH) * 0.5
+    WarehouseUI.layoutScale = scale
+    WarehouseUI.layoutOffsetX = offsetX
+    WarehouseUI.layoutOffsetY = offsetY
+
     nvgBeginPath(ctx)
     nvgRect(ctx, 0, 0, width, height)
-    nvgFillPaint(ctx, bg)
+    nvgFillColor(ctx, nvgRGBA(4, 6, 5, 255))
     nvgFill(ctx)
 
-    local headerH = drawHeader(ctx, width, tab)
-    local pad = 12
-    local contentY = headerH + 7
-    local contentH = height - contentY - pad
-    local tabsW = clamp(width * 0.105, 82, 108)
-    local sideW = clamp(width * 0.24, 160, 245)
-    local gap = 7
+    nvgSave(ctx)
+    nvgTranslate(ctx, offsetX, offsetY)
+    nvgScale(ctx, scale, scale)
 
-    if width / math.max(1, height) < 0.82 then
-        tabsW = clamp(width * 0.20, 76, 96)
-        sideW = clamp(width * 0.28, 124, 175)
+    if not drawImageRect(ctx, data.masterImage, 0, 0, DESIGN_W, DESIGN_H) then
+        nvgBeginPath(ctx)
+        nvgRect(ctx, 0, 0, DESIGN_W, DESIGN_H)
+        nvgFillColor(ctx, nvgRGBA(12, 14, 12, 255))
+        nvgFill(ctx)
     end
 
-    drawTabs(ctx, pad, contentY, tabsW)
-    local gridX = pad + tabsW + gap
-    local gridW = width - gridX - sideW - gap - pad
-    drawCutPanel(ctx, gridX, contentY, gridW, contentH,
-        { 13, 16, 19, 248 }, { 61, 72, 77, 185 }, false)
+    -- 清空母版中的示例物品，只保留设计稿网格与旧纸金属框架。
+    nvgBeginPath(ctx)
+    nvgRect(ctx, 50, 150, 850, 532)
+    nvgFillColor(ctx, nvgRGBA(9, 13, 11, 246))
+    nvgFill(ctx)
 
-    drawGrid(ctx, gridX + 10, contentY + 8, gridW - 20, contentH - 16, tab, data)
-    drawUpgradePanel(ctx, gridX + gridW + gap, contentY, sideW, contentH, tab, data)
-    drawInfoPopup(ctx, width, height, data)
+    local usedCells = 0
+    rebuildPlacements(tab)
+    for _, placement in pairs(WarehouseUI.placements) do
+        usedCells = usedCells + placement.w * placement.h
+    end
+    local capacity = getCapacity(tab)
+    nvgBeginPath(ctx)
+    nvgRect(ctx, 772, 91, 135, 57)
+    nvgFillColor(ctx, nvgRGBA(31, 29, 21, 245))
+    nvgFill(ctx)
+    nvgFontFace(ctx, "sans")
+    nvgTextAlign(ctx, NVG_ALIGN_RIGHT + NVG_ALIGN_TOP)
+    nvgFontSize(ctx, 20)
+    nvgFillColor(ctx, nvgRGBA(218, 207, 176, 255))
+    nvgText(ctx, 897, 97, "容量 " .. tostring(usedCells) .. "/" .. tostring(capacity))
+    nvgText(ctx, 897, 121, "仓库等级 " .. tostring(tab.level or 1))
+
+    drawDesignTabs(ctx)
+    WarehouseUI.backRect = { x = 1304, y = 10, w = 57, h = 55 }
+
+    drawGrid(ctx, 50, 150, 870, 532, tab, data)
+    drawArchivePanel(ctx, tab, data)
+    drawDesignButtons(ctx)
 
     if WarehouseUI.noticeTimer > 0 and WarehouseUI.notice ~= "" then
-        local noticeW = math.min(width - 40, 310)
-        local noticeH = 38
-        local noticeX = (width - noticeW) * 0.5
-        local noticeY = height - noticeH - 18
         nvgBeginPath(ctx)
-        nvgRoundedRect(ctx, noticeX, noticeY, noticeW, noticeH, 5)
-        nvgFillColor(ctx, nvgRGBA(29, 31, 29, 245))
+        nvgRoundedRect(ctx, 500, 704, 400, 42, 5)
+        nvgFillColor(ctx, nvgRGBA(24, 24, 19, 244))
         nvgFill(ctx)
         nvgBeginPath(ctx)
-        nvgRoundedRect(ctx, noticeX, noticeY, noticeW, noticeH, 5)
-        nvgStrokeColor(ctx, nvgRGBA(202, 153, 65, 220))
+        nvgRoundedRect(ctx, 500, 704, 400, 42, 5)
+        nvgStrokeColor(ctx, nvgRGBA(186, 153, 81, 220))
         nvgStrokeWidth(ctx, 1)
         nvgStroke(ctx)
         nvgTextAlign(ctx, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-        nvgFontSize(ctx, 12)
-        nvgFillColor(ctx, nvgRGBA(239, 228, 203, 255))
-        nvgText(ctx, noticeX + noticeW * 0.5, noticeY + noticeH * 0.5, WarehouseUI.notice)
+        nvgFontSize(ctx, 16)
+        nvgFillColor(ctx, nvgRGBA(235, 224, 196, 255))
+        nvgText(ctx, 700, 725, WarehouseUI.notice)
     end
+
+    nvgRestore(ctx)
 end
 
 return WarehouseUI
