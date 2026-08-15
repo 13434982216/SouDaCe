@@ -1,3 +1,5 @@
+local Currency = require "Currency"
+
 local CodexUI = {
     active = false,
     scrollY = 0,
@@ -75,16 +77,8 @@ local function beginCutRect(ctx, x, y, w, h, cut)
 end
 
 local function formatValue(v)
-    if not v then return "---" end
-    local s = tostring(math.floor(v))
-    local r = ""
-    local n = 0
-    for i = #s, 1, -1 do
-        n = n + 1
-        r = s:sub(i, i) .. r
-        if n % 3 == 0 and i > 1 then r = "," .. r end
-    end
-    return r
+    if v == nil then return "---" end
+    return Currency.FormatNumber(v)
 end
 
 local function getItemImageAspect(itemName)
@@ -540,7 +534,7 @@ local function drawDetailPanel(ctx, w, h, item, iconId, itemValues, itemSizes)
     nvgFontSize(ctx, 13)
     nvgFillColor(ctx, nvgRGBA(220, 195, 130, 240))
     nvgText(ctx, px + pw * 0.5 + barW * 0.5 + 6, barY + barH * 0.5,
-        formatValue(val and val.value or 0) .. " 比特")
+        Currency.Format(val and val.value or 0))
 
     -- 占用格子
     textY = textY + 36
@@ -636,7 +630,7 @@ local function drawDetailPanelFixed(ctx, w, h, item, iconId, itemValues, itemSiz
     nvgText(ctx, infoX, rarityY, RARITY_LABELS[item.rarity] or "普通")
     nvgFontSize(ctx, 13)
     nvgFillColor(ctx, nvgRGBA(225, 195, 130, 245))
-    nvgText(ctx, infoX, rarityY + 26, formatValue(val.value or 0) .. " 比特")
+    nvgText(ctx, infoX, rarityY + 26, Currency.Format(val.value or 0))
     nvgFontSize(ctx, 11)
     nvgFillColor(ctx, nvgRGBA(145, 152, 156, 230))
     nvgText(ctx, infoX, rarityY + 52, string.format("背包占用: %d × %d 格", size[1], size[2]))

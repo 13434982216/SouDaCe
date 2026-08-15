@@ -3,6 +3,7 @@
 dist/
 .cli/
 logs/
+screenshots/
 *.log
 logs/.nfs*
 .sce/logs/
@@ -10,6 +11,7 @@ logs/.nfs*
 
 # Temp & swap files
 .tmp/
+_uploads/
 *.crswap
 .DS_Store
 

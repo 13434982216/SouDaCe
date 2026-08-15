@@ -137,13 +137,31 @@ local WAREHOUSE_RARITY_CELL_KEYS = {
     green = "green1x1",
 }
 
-local function drawWarehouseCellImage(ctx, image, rect, selected)
+local function drawWarehouseCellImage(ctx, image, rect, selected, vertical)
     if not image or image <= 0 then return false end
-    local paint = nvgImagePattern(ctx, rect.x, rect.y, rect.w, rect.h, 0, image, 1.0)
-    nvgBeginPath(ctx)
-    nvgRect(ctx, rect.x, rect.y, rect.w, rect.h)
-    nvgFillPaint(ctx, paint)
-    nvgFill(ctx)
+    if vertical then
+        local centerX = rect.x + rect.w * 0.5
+        local centerY = rect.y + rect.h * 0.5
+        local imageW = rect.h
+        local imageH = rect.w
+        nvgSave(ctx)
+        nvgTranslate(ctx, centerX, centerY)
+        nvgRotate(ctx, math.pi * 0.5)
+        local paint = nvgImagePattern(ctx, -imageW * 0.5, -imageH * 0.5,
+            imageW, imageH, 0, image, 1.0)
+        nvgBeginPath(ctx)
+        nvgRect(ctx, -imageW * 0.5, -imageH * 0.5, imageW, imageH)
+        nvgFillPaint(ctx, paint)
+        nvgFill(ctx)
+        nvgRestore(ctx)
+    else
+        local paint = nvgImagePattern(ctx, rect.x, rect.y,
+            rect.w, rect.h, 0, image, 1.0)
+        nvgBeginPath(ctx)
+        nvgRect(ctx, rect.x, rect.y, rect.w, rect.h)
+        nvgFillPaint(ctx, paint)
+        nvgFill(ctx)
+    end
     if selected then
         nvgBeginPath(ctx)
         nvgRect(ctx, rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2)
@@ -361,22 +379,6 @@ local function isCellOccupied(tab, cellIndex, exceptIndex)
     return owner ~= nil and owner ~= exceptIndex
 end
 
-local function findPlacementForItem(tab, itemIndex)
-    local entry = tab.items[itemIndex]
-    if not entry then return nil end
-    local cols = tab.cols or 8
-    local rows = tab.rows or 6
-    local itemW, itemH = getItemSize(entry)
-    for row = 1, rows do
-        for col = 1, cols do
-            if placementFits(tab, col, row, itemW, itemH, itemIndex) then
-                return (row - 1) * cols + col
-            end
-        end
-    end
-    return nil
-end
-
 local function transferItemToTab(sourceItemIndex, targetTabIndex)
     local sourceTab = WarehouseUI.tabs[WarehouseUI.activeTab]
     local targetTab = WarehouseUI.tabs[targetTabIndex]
@@ -414,34 +416,43 @@ end
 local function rotateItem(tab, itemIndex)
     rebuildPlacements(tab)
     local entry = tab.items[itemIndex]
-    if not entry then return false end
+    local placement = WarehouseUI.placements[itemIndex]
+    if not entry or not placement then return false end
+
     local baseSize = WarehouseUI.itemSizes[getItemName(entry)] or { 1, 1 }
     if baseSize[1] == baseSize[2] then return false end
+
     if type(entry) ~= "table" then
         entry = { item = getItemName(entry) }
         tab.items[itemIndex] = entry
     end
-    local oldOrientation = entry.orientation or "horizontal"
-    entry.orientation = oldOrientation == "vertical" and "horizontal" or "vertical"
-    local placement = WarehouseUI.placements[itemIndex]
-    if placement then
-        local cols = tab.cols or 8
-        local currentCell = (placement.row - 1) * cols + placement.col
+
+    local oldOrientation = entry.orientation
+    local oldCol = entry.col
+    local oldRow = entry.row
+    local currentOrientation = oldOrientation or "horizontal"
+    entry.orientation = currentOrientation == "vertical"
+        and "horizontal" or "vertical"
+
+    local itemW, itemH = getItemSize(entry)
+    local sameCellCount = itemW * itemH == baseSize[1] * baseSize[2]
+    local fitsInPlace = sameCellCount and placementFits(tab,
+        placement.col, placement.row, itemW, itemH, itemIndex)
+    if fitsInPlace then
+        entry.col = placement.col - 1
+        entry.row = placement.row - 1
         rebuildPlacements(tab)
-        if canPlaceItem(tab, itemIndex, currentCell) then
-            setItemCell(tab, itemIndex, currentCell)
-            rebuildPlacements(tab)
+        local rotated = WarehouseUI.placements[itemIndex]
+        if rotated and rotated.col == placement.col
+            and rotated.row == placement.row
+            and rotated.w == itemW and rotated.h == itemH then
             return true
         end
     end
-    rebuildPlacements(tab)
-    local freeCell = findPlacementForItem(tab, itemIndex)
-    if freeCell then
-        setItemCell(tab, itemIndex, freeCell)
-        rebuildPlacements(tab)
-        return true
-    end
+
     entry.orientation = oldOrientation
+    entry.col = oldCol
+    entry.row = oldRow
     rebuildPlacements(tab)
     return false
 end
@@ -634,8 +645,9 @@ local function drawItem(ctx, rect, entry, data, index, registerHit, ghost)
         or "green1x1"
     local cellImage = data.cellImages and data.cellImages[cellKey]
     local hasExactCell = cellImage and cellImage > 0
+    local vertical = type(entry) == "table" and entry.orientation == "vertical"
     if hasExactCell then
-        drawWarehouseCellImage(ctx, cellImage, rect, isSelected)
+        drawWarehouseCellImage(ctx, cellImage, rect, isSelected, vertical)
     else
         drawWarehouseItemCell(ctx, rect, cellColor, isSelected)
     end
@@ -643,28 +655,26 @@ local function drawItem(ctx, rect, entry, data, index, registerHit, ghost)
     local nameBarH = math.min(22, math.max(16, rect.h * 0.28))
     local nameBarY = rect.y + rect.h - nameBarH
     if iconId and iconId > 0 and not hideIcon then
-        local vertical = type(entry) == "table" and entry.orientation == "vertical"
         local sourceW, sourceH = nvgImageSize(ctx, iconId)
         sourceW = math.max(1, sourceW or 1)
         sourceH = math.max(1, sourceH or 1)
         local imageScale = (itemName == "棒球棍" or itemName == "散弹枪") and 0.82 or 1.0
         local itemW, itemH = getItemSize(entry)
         local isSingleCell = itemW == 1 and itemH == 1
-        local targetW = rect.w * 0.72 * imageScale
-        local targetH = math.max(12, rect.h - nameBarH - 8) * 0.82 * imageScale
+        local layoutW = vertical and rect.h or rect.w
+        local layoutH = vertical and rect.w or rect.h
+        local layoutNameBarH = math.min(22, math.max(16, layoutH * 0.28))
+        local targetW = layoutW * 0.72 * imageScale
+        local targetH = math.max(12, layoutH - layoutNameBarH - 8) * 0.82 * imageScale
         if isSingleCell then
-            targetW = rect.w * 0.94
-            targetH = math.max(12, rect.h - nameBarH - 2) * 0.98
+            targetW = layoutW * 0.94
+            targetH = math.max(12, layoutH - layoutNameBarH - 2) * 0.98
         end
         local centerX = rect.x + rect.w * 0.5
         local centerY = rect.y + (rect.h - nameBarH) * 0.5
         if not hasExactCell then
-            targetW = rect.w * 1.14 * imageScale
-            targetH = rect.h * 0.98 * imageScale
-        end
-        if vertical then
-            targetW = (hasExactCell and math.max(12, rect.h - nameBarH - 8) or rect.h) * 1.14 * imageScale
-            targetH = (hasExactCell and rect.w * 0.72 or rect.w * 0.98) * imageScale
+            targetW = layoutW * 1.14 * imageScale
+            targetH = layoutH * 0.98 * imageScale
         end
         local imageAspect = sourceW / sourceH
         local targetAspect = targetW / targetH
@@ -731,10 +741,11 @@ local function drawGrid(ctx, x, y, w, h, tab, data)
     local rows = tab.rows or 6
     local scrollbarW = 18
     local viewportW = math.max(40, w - scrollbarW)
-    local cellW = viewportW / cols
-    local cellH = 76
-    local contentW = cellW * cols
-    local contentH = cellH * rows
+    local cellSize = viewportW / cols
+    local cellW = cellSize
+    local cellH = cellSize
+    local contentW = cellSize * cols
+    local contentH = cellSize * rows
     local maxScroll = math.max(0, contentH - h)
     WarehouseUI.scrollMax = maxScroll
     WarehouseUI.scrollOffset = clamp(WarehouseUI.scrollOffset, 0, maxScroll)
@@ -742,9 +753,9 @@ local function drawGrid(ctx, x, y, w, h, tab, data)
     local startX = x + (viewportW - contentW) * 0.5
     local startY = y - WarehouseUI.scrollOffset
     WarehouseUI.gridRects = {}
-    WarehouseUI.gridCellSize = math.min(cellW, cellH)
-    WarehouseUI.gridCellW = cellW
-    WarehouseUI.gridCellH = cellH
+    WarehouseUI.gridCellSize = cellSize
+    WarehouseUI.gridCellW = cellSize
+    WarehouseUI.gridCellH = cellSize
     WarehouseUI.cellRects = {}
     WarehouseUI.itemRects = {}
     WarehouseUI.itemSizes = data.itemSizes or WarehouseUI.itemSizes or {}

@@ -1,3 +1,5 @@
+local Currency = require "Currency"
+
 local ShopUI = {
     selectedCategory = "guns",
     hovered = nil,
@@ -177,10 +179,11 @@ local function pointInRect(x, y, rect)
 end
 
 local function formatNumber(value)
-    local text = tostring(math.max(0, math.floor(tonumber(value) or 0)))
-    local reversed = string.reverse(text)
-    reversed = string.gsub(reversed, "(%d%d%d)", "%1,")
-    return string.gsub(string.reverse(reversed), "^,", "")
+    return Currency.FormatNumber(value)
+end
+
+local function formatBitValue(value)
+    return Currency.Format(value)
 end
 
 local function screenToDesign(x, y)
@@ -399,13 +402,14 @@ local function drawHeader(ctx, data)
     nvgText(ctx, 1315, 44, "×")
 
     drawMetalPanel(ctx, 1008, 20, 254, 49, false)
+    drawImageContained(ctx, data.currencyIcon, 1017, 30, 29, 29, 1)
     nvgTextAlign(ctx, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
     nvgFontSize(ctx, 10)
     nvgFillColor(ctx, nvgRGBA(151, 138, 105, 245))
-    nvgText(ctx, 1028, 35, "据点账户 / BITS")
+    nvgText(ctx, 1053, 35, "据点账户 / 比特")
     nvgFontSize(ctx, 22)
     nvgFillColor(ctx, nvgRGBA(228, 195, 105, 255))
-    nvgText(ctx, 1028, 56, formatNumber(data.bits))
+    nvgText(ctx, 1053, 56, formatNumber(data.bits))
     nvgTextAlign(ctx, NVG_ALIGN_RIGHT + NVG_ALIGN_MIDDLE)
     nvgFontSize(ctx, 9)
     nvgFillColor(ctx, nvgRGBA(150, 66, 50, 245))
@@ -532,7 +536,7 @@ local function drawProductCard(ctx, product, rect, data)
     nvgFillColor(ctx, nvgRGBA(218, 178, 78, 255))
     nvgText(ctx, priceRect.x + priceRect.w * 0.5,
         priceRect.y + priceRect.h * 0.5,
-        formatNumber(product.price) .. " BITS")
+        formatBitValue(product.price))
 
     if selected or hot then
         nvgBeginPath(ctx)
@@ -687,7 +691,7 @@ local function drawDetail(ctx, data)
     nvgFontSize(ctx, 25)
     nvgFillColor(ctx, canAfford and nvgRGBA(151, 104, 42, 255)
         or nvgRGBA(126, 64, 51, 255))
-    nvgText(ctx, x + 44, y + 526, formatNumber(product.price) .. " BITS")
+    nvgText(ctx, x + 44, y + 526, formatBitValue(product.price))
 
     ShopUI.modalBuyRect = { x = x + 42, y = y + 548, w = w - 84, h = 49 }
     local hot = ShopUI.hovered == "modal-buy" or ShopUI.pressed == "modal-buy"
@@ -989,7 +993,7 @@ local function drawReplicaProductCard(ctx, product, rect, data, design)
     nvgFontSize(ctx, 18)
     nvgFillColor(ctx, nvgRGBA(211, 171, 79, 255))
     nvgText(ctx, rect.x + rect.w * 0.5, rect.y + rect.h - 29,
-        formatNumber(product.price) .. " BITS")
+        formatBitValue(product.price))
 
     local id = "product:" .. product.id
     local selected = ShopUI.modal and ShopUI.modal.productId == product.id
@@ -1134,7 +1138,7 @@ local function drawReplicaDetail(ctx, data, design)
     nvgFontSize(ctx, 17)
     nvgFillColor(ctx, canAfford and nvgRGBA(211, 171, 79, 255)
         or nvgRGBA(142, 75, 57, 255))
-    nvgText(ctx, x + 296, y + 501, formatNumber(product.price) .. " BITS")
+    nvgText(ctx, x + 296, y + 501, formatBitValue(product.price))
 
     local hot = ShopUI.hovered == "modal-buy" or ShopUI.pressed == "modal-buy"
     if hot then
@@ -1200,17 +1204,22 @@ local function drawDesignReplica(ctx, data)
         end
     end
 
-    if (tonumber(data.bits) or 0) ~= 30000 then
-        nvgBeginPath(ctx)
-        nvgRect(ctx, 1100, 43, 147, 28)
-        nvgFillColor(ctx, nvgRGBA(17, 17, 14, 245))
-        nvgFill(ctx)
-        nvgFontFace(ctx, "sans")
-        nvgTextAlign(ctx, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
-        nvgFontSize(ctx, 19)
-        nvgFillColor(ctx, nvgRGBA(209, 170, 83, 255))
-        nvgText(ctx, 1116, 58, formatNumber(data.bits) .. " BITS")
-    end
+    nvgBeginPath(ctx)
+    nvgRect(ctx, 1063, 18, 208, 57)
+    nvgFillColor(ctx, nvgRGBA(10, 11, 9, 248))
+    nvgFill(ctx)
+    nvgStrokeColor(ctx, nvgRGBA(103, 83, 43, 230))
+    nvgStrokeWidth(ctx, 1)
+    nvgStroke(ctx)
+    drawImageContained(ctx, data.currencyIcon, 1073, 31, 31, 31, 1)
+    nvgFontFace(ctx, "sans")
+    nvgTextAlign(ctx, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
+    nvgFontSize(ctx, 9)
+    nvgFillColor(ctx, nvgRGBA(151, 138, 105, 245))
+    nvgText(ctx, 1112, 34, "据点账户 / 比特")
+    nvgFontSize(ctx, 18)
+    nvgFillColor(ctx, nvgRGBA(209, 170, 83, 255))
+    nvgText(ctx, 1112, 57, formatNumber(data.bits))
 
     drawNotice(ctx)
 end

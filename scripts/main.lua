@@ -7,12 +7,16 @@
 ---@diagnostic disable: undefined-global
 
 require "urhox-libs.UI.GameHUD"
+GameplayHUD = require "GameplayHUD"
+Currency = require "Currency"
 HomeUI = require "HomeUI"
+MapSelectUI = require "MapSelectUI"
 WarehouseUI = require "WarehouseUI"
 ShopUI = require "ShopUI"
 CodexUI = require "CodexUI"
 BlackMarketUI = require "BlackMarketUI"
 BlackMarketCloud = require "BlackMarketCloud"
+PortLevel = require "PortLevel"
 
 local joystick_     = nil   -- 虚拟摇杆（PC键盘/移动触摸统一接口）
 local descendBtn_   = nil   -- 开门按钮（手机端，原Crouch）
@@ -71,6 +75,16 @@ local W, H = 0, 0
 local dpr = 1.0
 local cameraX = 0
 local gameTime = 0
+
+-- 临港地图：使用设计稿作为可玩关卡背景，左右两段连续拼接。
+local portLevelActive = false
+local portBackgroundLeftImg = 0
+local portBackgroundMainImg = 0
+local portGuardImg = 0
+local portBarricadeImg = 0
+local portWorldPanelW = 0
+local portGateWorldX = 0
+local configureSelectedLevel = nil
 
 -- ── 客厅门状态（各楼层独立，可动态开关）──
 -- openProg: 0=关闭 1=全开, target: 目标状态
@@ -386,8 +400,60 @@ local lootUI = {
 }
 
 -- ── 资源加载状态（进入游戏前先加载所有资源）──
-local appState = "loading"   -- "loading" | "home" | "shop" | "blackmarket" | "warehouse" | "loadout" | "playing"
+local appState = "loading"   -- "loading" | "home" | "map-select" | "shop" | "blackmarket" | "warehouse" | "loadout" | "playing"
 loadoutWarehouseIdx = nil
+MapSelection = {
+    -- 首页直接出战时默认进入当前开发目标：大阪临港工业区。
+    -- 东京仍保留为独立可选项，并继续加载原住宅楼/街区关卡。
+    selectedMapId = "osaka",
+    locations = {
+    {
+        id = "tokyo",
+        name = "东京废弃城区",
+        shortName = "东京",
+        region = "关东地区 / 东京都心封锁区",
+        mapX = 0.646,
+        mapY = 0.542,
+        previewImage = 0,
+        danger = "高危",
+        weather = "阴天 / 小雨",
+        tideTime = "25:00",
+        mission = "搜索物资，寻找撤离点",
+        reward = "18,000 - 28,000 比特",
+        description = "建筑密集、视野受限。高价值民生与电子物资较多，尸潮活动频繁。",
+    },
+    {
+        id = "osaka",
+        name = "大阪临港工业区",
+        shortName = "大阪",
+        region = "关西地区 / 大阪湾港区",
+        mapX = 0.455,
+        mapY = 0.676,
+        previewImage = 0,
+        danger = "中高危",
+        weather = "强风 / 阵雨",
+        tideTime = "22:00",
+        mission = "搜索港区仓储与工业物资",
+        reward = "16,000 - 25,000 比特",
+        description = "货柜与厂房形成复杂通道。工业材料储量可观，但开阔码头缺少掩体。",
+    },
+    {
+        id = "sapporo",
+        name = "札幌冰封街区",
+        shortName = "札幌",
+        region = "北海道地区 / 札幌市中心",
+        mapX = 0.781,
+        mapY = 0.137,
+        previewImage = 0,
+        danger = "中危",
+        weather = "降雪 / 低温",
+        tideTime = "28:00",
+        mission = "搜寻药品与保暖补给",
+        reward = "14,000 - 22,000 比特",
+        description = "严寒降低感染者活性，也会持续消耗体力。药店和商场仍可能留有补给。",
+    },
+    },
+}
 local homeTouchActive = false -- 首页触摸防抖
 local homeTouchX = 0
 local homeTouchY = 0
@@ -520,7 +586,19 @@ local PRELOAD_RESOURCES = {
     "image/首页空手幸存者立绘_20260811135500.png",
     "image/首页日本全国感染态势图_20260811135348.png",
     "image/首页东京废弃城区预览_20260811135412.png",
+    "image/大阪临港工业区预览_20260814023855.png",
+    "image/札幌冰封街区预览_20260814023845.png",
+    "image/edited_角色朝向铁栏门港口背景_20260815020615.png",
+    "image/港口左侧延伸横版场景_20260815021038.png",
+    "image/edited_窄平台海上哨塔港口背景_20260815015732.png",
+    "image/新画风临港工业区横版关卡_20260815053014.png",
+    "image/edited_临港关卡铁门主背景_无守卫_20260815053558.png",
+    "image/临港关卡左侧偷渡登陆延伸背景_20260815053720.png",
+    "image/临港关卡封锁守卫透明素材_20260815053721.png",
+    "image/临港关卡警戒路障透明素材_20260815053727.png",
     "image/首页设计稿母版.png",
+    "image/home_layers/全国态势地图_无东京固定框.png",
+    "image/edited_末世设计稿风比特币图标_20260813124308.png",
     "image/warehouse/据点仓库设计稿母版.png",
     "image/仓库翡翠原石风格物资_20260813045549_clean.png",
     "image/仓库金条风格物资_20260813045541_clean.png",
@@ -573,6 +651,8 @@ local PRELOAD_RESOURCES = {
     "image/home_layers/面板边框_态势地图.png",
     "image/home_layers/面板边框_地图情报.png",
     "image/home_layers/顶部信息条背景.png",
+    "image/home_layers/status/据点等级图标.png",
+    "image/home_layers/status/幸存者人数图标.png",
     "image/home_layers/底部导航按钮背景.png",
     "image/home_layers/战前整备按钮背景.png",
     "image/home_layers/更换地图按钮背景.png",
@@ -653,10 +733,16 @@ local PRELOAD_RESOURCES = {
     "image/伪造实验室门禁卡_20260809093213.png",
     "image/黑市通用战术消音器_20260809100641.png",
     "image/黑市武器保险券_20260809100637.png",
+    "image/黑市三页签动态UI空白框架_20260813153247.png",
     -- 首页远观沦陷城市视觉资源
     "image/远望日本沦陷城市_20260811103414.png",
     -- 二级背包图标
     "image/backpack_tier2_20260718072219.png",
+    -- 游戏内 HUD：直接取自用户确认的参考图笔触与磨损纹理
+    "image/gameplay_hud/heart.png",
+    "image/gameplay_hud/weapon.png",
+    "image/gameplay_hud/backpack.png",
+    "image/gameplay_hud/reload.png",
 }
 local flashlightIconImg = 0  -- 手电筒图标NanoVG纹理ID
 local loadingSpinnerImg = 0  -- 搜索放大镜图标NanoVG纹理ID
@@ -665,12 +751,16 @@ local backpackTier2Img = 0  -- 二级背包图标
 local itemIcons = {}  -- { ["物品名"] = nvgImageId }
 blackMarketArt = {
     broker = 0,
+    frame = 0,
     home_crisis = 0,
     home_survivor = 0,
     home_national_map = 0,
     home_location = 0,
+    map_location_osaka = 0,
+    map_location_sapporo = 0,
     home_master = 0,
     home_layers = {},
+    currencyIcon = 0,
     warehouse_master = 0,
     warehouse_cells = {},
     shop_design = {},
@@ -678,6 +768,7 @@ blackMarketArt = {
     lab_keycard = 0,
     suppressor = 0,
     weapon_insurance = 0,
+    gameplay_hud = {},
 }
 local roomDecorImgs = {} -- 一楼左侧客厅装饰家具纹理
 local lootBtnPressed_ = false  -- 手机端"搜刮"按钮按下标记
@@ -1269,17 +1360,16 @@ lootUI.cs2FurnitureLootSpots = {
     },
 }
 
-lootUI.currencyName = "比特"
+lootUI.currencyName = Currency.Name
+lootUI.currencyIconPath = "image/edited_末世设计稿风比特币图标_20260813124308.png"
 lootUI.bits = 30000
 
+function lootUI.FormatBitNumber(value)
+    return Currency.FormatNumber(value)
+end
+
 function lootUI.FormatBitValue(value)
-    local n = math.max(0, math.floor(tonumber(value) or 0))
-    local text = tostring(n)
-    local reversed = string.reverse(text)
-    reversed = string.gsub(reversed, "(%d%d%d)", "%1,")
-    text = string.reverse(reversed)
-    text = string.gsub(text, "^,", "")
-    return text .. " " .. lootUI.currencyName
+    return Currency.Format(value)
 end
 
 lootUI.lootPools = {
@@ -1907,6 +1997,75 @@ blackMarketMerchantStock = {
         maxStock = 2,
     },
 }
+blackMarketAuctions = {
+    {
+        id = "auction_laptop",
+        item = "军用加固笔记本",
+        seller = "前线技术员",
+        currentBid = 18000,
+        minIncrement = 2000,
+        remaining = 7 * 60 + 25,
+        status = "open",
+        leader = "npc",
+        playerBid = 0,
+    },
+    {
+        id = "auction_thermal",
+        item = "军用热成像仪",
+        seller = "北区侦察队",
+        currentBid = 98000,
+        minIncrement = 8000,
+        remaining = 12 * 60 + 40,
+        status = "open",
+        leader = "npc",
+        playerBid = 0,
+    },
+    {
+        id = "auction_necklace",
+        item = "钻石项链",
+        seller = "收藏家 K",
+        currentBid = 76000,
+        minIncrement = 6000,
+        remaining = 18 * 60 + 15,
+        status = "open",
+        leader = "npc",
+        playerBid = 0,
+    },
+    {
+        id = "auction_chip",
+        item = "航空级控制芯片",
+        seller = "撤离航线维护组",
+        currentBid = 112000,
+        minIncrement = 9000,
+        remaining = 25 * 60,
+        status = "open",
+        leader = "npc",
+        playerBid = 0,
+    },
+    {
+        id = "auction_sample",
+        item = "机密生物样本",
+        seller = "无证医生",
+        currentBid = 185000,
+        minIncrement = 15000,
+        remaining = 31 * 60 + 20,
+        status = "open",
+        leader = "npc",
+        playerBid = 0,
+    },
+    {
+        id = "auction_watch",
+        item = "名厂机械腕表",
+        seller = "灾前遗物掮客",
+        currentBid = 132000,
+        minIncrement = 10000,
+        remaining = 42 * 60 + 5,
+        status = "open",
+        leader = "npc",
+        playerBid = 0,
+    },
+}
+blackMarketAuctionCheckpoint = 30
 blackMarketPerks = {
     tunnel_intel = false,
     lab_keycard = false,
@@ -1938,7 +2097,7 @@ BLACK_MARKET_CATEGORY_ITEMS = {
     },
 }
 
-BlackMarketCloud.VERSION = 1
+BlackMarketCloud.VERSION = 2
 BlackMarketCloud.LOAD_TIMEOUT = 8.0
 BlackMarketCloud.loadStarted = false
 BlackMarketCloud.loadComplete = false
@@ -1966,8 +2125,8 @@ function BlackMarketCloud.SanitizeWarehouseItems(items)
             and not lootUI.IsTakenGridEntry(entry) then
             if type(entry) == "table" then
                 local cleaned = { item = itemName }
-                if type(entry.col) == "number" then cleaned.col = math.max(1, math.floor(entry.col)) end
-                if type(entry.row) == "number" then cleaned.row = math.max(1, math.floor(entry.row)) end
+                if type(entry.col) == "number" then cleaned.col = math.max(0, math.floor(entry.col)) end
+                if type(entry.row) == "number" then cleaned.row = math.max(0, math.floor(entry.row)) end
                 if entry.orientation == "vertical" then cleaned.orientation = "vertical" end
                 result[#result + 1] = cleaned
             else
@@ -2004,6 +2163,18 @@ function BlackMarketCloud.BuildSnapshot()
         merchantStock[product.id] = math.floor(tonumber(product.stock) or 0)
     end
 
+    local auctions = {}
+    for _, auction in ipairs(blackMarketAuctions or {}) do
+        auctions[#auctions + 1] = {
+            id = tostring(auction.id),
+            currentBid = math.max(0, math.floor(tonumber(auction.currentBid) or 0)),
+            remaining = math.max(0, tonumber(auction.remaining) or 0),
+            status = tostring(auction.status or "open"),
+            leader = tostring(auction.leader or "npc"),
+            playerBid = math.max(0, math.floor(tonumber(auction.playerBid) or 0)),
+        }
+    end
+
     return {
         version = BlackMarketCloud.VERSION,
         bits = math.max(0, math.floor(tonumber(lootUI.bits) or 0)),
@@ -2031,6 +2202,7 @@ function BlackMarketCloud.BuildSnapshot()
             rates = BlackMarketCloud.CloneValue(blackMarketRates),
             orderStates = orderStates,
             merchantStock = merchantStock,
+            auctions = auctions,
             perks = BlackMarketCloud.CloneValue(blackMarketPerks),
             history = BlackMarketCloud.CloneValue(blackMarketHistory),
         },
@@ -2136,6 +2308,32 @@ function BlackMarketCloud.ApplySnapshot(snapshot)
             if stock then
                 product.stock = math.max(0,
                     math.min(product.maxStock or stock, math.floor(stock)))
+            end
+        end
+    end
+
+    if type(market.auctions) == "table" then
+        local savedById = {}
+        for index, saved in ipairs(market.auctions) do
+            if index > 12 then break end
+            if type(saved) == "table" and type(saved.id) == "string" then
+                savedById[saved.id] = saved
+            end
+        end
+        for _, auction in ipairs(blackMarketAuctions) do
+            local saved = savedById[auction.id]
+            if saved then
+                auction.currentBid = math.max(0,
+                    math.floor(tonumber(saved.currentBid) or auction.currentBid))
+                auction.remaining = math.max(0,
+                    math.min(24 * 60 * 60,
+                        tonumber(saved.remaining) or auction.remaining))
+                local status = tostring(saved.status or "open")
+                auction.status = (status == "won" or status == "lost")
+                    and status or "open"
+                auction.leader = saved.leader == "player" and "player" or "npc"
+                auction.playerBid = math.max(0,
+                    math.floor(tonumber(saved.playerBid) or 0))
             end
         end
     end
@@ -2250,6 +2448,55 @@ function updateBlackMarketRefresh(dt)
     end
 end
 
+function updateBlackMarketAuctions(dt)
+    local elapsed = math.max(0, tonumber(dt) or 0)
+    blackMarketAuctionCheckpoint = blackMarketAuctionCheckpoint - elapsed
+    local settled = false
+    for _, auction in ipairs(blackMarketAuctions) do
+        if auction.status == "open" then
+            local remaining = math.max(0,
+                (tonumber(auction.remaining) or 0) - elapsed)
+            rawset(auction, "remaining", remaining)
+            if auction.remaining <= 0 then
+                if auction.leader == "player" and (auction.playerBid or 0) > 0 then
+                    local warehouse = warehouseTabs[1]
+                    local itemSize = ITEM_SIZES[auction.item] or { 1, 1 }
+                    local capacity = (warehouse.cols or 8) * (warehouse.rows or 20)
+                    local used = getWarehouseUsedCells(warehouse)
+                    if used + itemSize[1] * itemSize[2] <= capacity then
+                        auction.status = "won"
+                        table.insert(warehouse.items, auction.item)
+                        blackMarketReputation = blackMarketReputation + 3
+                        addBlackMarketHistory("竞拍获胜：" .. auction.item,
+                            -math.max(0, math.floor(tonumber(auction.playerBid) or 0)))
+                        print("[BlackMarket] 拍卖结算获胜: " .. auction.id
+                            .. " 物品=" .. auction.item
+                            .. " 成交=" .. tostring(auction.playerBid))
+                    else
+                        local refund = math.max(0,
+                            math.floor(tonumber(auction.playerBid) or 0))
+                        lootUI.bits = lootUI.bits + refund
+                        auction.status = "lost"
+                        addBlackMarketHistory("拍卖获胜但仓库空间不足：" .. auction.item,
+                            refund)
+                        print("[BlackMarket] 拍卖结算失败，仓库空间不足并退款: " .. auction.id)
+                    end
+                else
+                    auction.status = "lost"
+                    print("[BlackMarket] 拍卖结束未参与: " .. auction.id)
+                end
+                settled = true
+            end
+        end
+    end
+    if settled then
+        BlackMarketCloud.MarkDirty("auction_settlement", true)
+    elseif blackMarketAuctionCheckpoint <= 0 then
+        blackMarketAuctionCheckpoint = 30
+        BlackMarketCloud.MarkDirty("auction_timer", false)
+    end
+end
+
 function getBlackMarketCategory(itemName)
     for category, items in pairs(BLACK_MARKET_CATEGORY_ITEMS) do
         if items[itemName] then return category end
@@ -2339,6 +2586,13 @@ end
 function findBlackMarketProduct(productId)
     for _, product in ipairs(blackMarketMerchantStock) do
         if product.id == productId then return product end
+    end
+    return nil
+end
+
+function findBlackMarketAuction(auctionId)
+    for _, auction in ipairs(blackMarketAuctions) do
+        if auction.id == auctionId then return auction end
     end
     return nil
 end
@@ -2494,6 +2748,40 @@ function handleBlackMarketMerchantSale(productId)
         .. " 余额=" .. tostring(lootUI.bits))
 end
 
+function handleBlackMarketAuctionBid(auctionId)
+    local auction = findBlackMarketAuction(auctionId)
+    if not auction then
+        BlackMarketUI.SetNotice("拍卖信息异常，请重新选择", false)
+        return
+    end
+    if auction.status ~= "open" or (auction.remaining or 0) <= 0 then
+        BlackMarketUI.SetNotice("该拍卖已经结束", false)
+        return
+    end
+
+    local currentBid = math.max(0, math.floor(tonumber(auction.currentBid) or 0))
+    local increment = math.max(1, math.floor(tonumber(auction.minIncrement) or 1))
+    local nextBid = currentBid + increment
+    local previousBid = math.max(0, math.floor(tonumber(auction.playerBid) or 0))
+    local additional = math.max(0, nextBid - previousBid)
+    if lootUI.bits < additional then
+        BlackMarketUI.SetNotice("比特不足，无法达到最低加价", false)
+        return
+    end
+
+    lootUI.bits = lootUI.bits - additional
+    auction.currentBid = nextBid
+    auction.playerBid = nextBid
+    auction.leader = "player"
+    addBlackMarketHistory("参与拍卖：" .. auction.item, -additional)
+    BlackMarketCloud.MarkDirty("auction_bid", true)
+    BlackMarketUI.SetNotice("出价成功：" .. lootUI.FormatBitValue(nextBid), true)
+    print("[BlackMarket] 拍卖出价成功: " .. auction.id
+        .. " 当前价=" .. tostring(nextBid)
+        .. " 冻结追加=" .. tostring(additional)
+        .. " 余额=" .. tostring(lootUI.bits))
+end
+
 function handleBlackMarketAction(action)
     if not action then return end
     action = tostring(action)
@@ -2502,7 +2790,31 @@ function handleBlackMarketAction(action)
         HomeUI.Reset()
         print("[BlackMarket] 返回据点首页")
         return
-    elseif action == "sell-confirm" then
+    elseif action == "sell-select-all" then
+        local selection = BlackMarketUI.GetSellSelection()
+        local visibleKeys = {}
+        for key in pairs(BlackMarketUI.itemRects or {}) do visibleKeys[key] = true end
+        local selectedVisible = 0
+        for _, item in ipairs(selection) do
+            local key = tostring(item.tabIndex) .. ":" .. tostring(item.itemIndex)
+            if visibleKeys[key] then selectedVisible = selectedVisible + 1 end
+        end
+        local selectAll = selectedVisible < 1
+            or selectedVisible < 0 + (function()
+                local total = 0
+                for _ in pairs(visibleKeys) do total = total + 1 end
+                return total
+            end)()
+        for key in pairs(visibleKeys) do
+            if selectAll then
+                BlackMarketUI.sellSelection[key] = true
+            else
+                BlackMarketUI.sellSelection[key] = nil
+            end
+        end
+        return
+    end
+    if action == "sell-confirm" then
         handleBlackMarketSale()
         return
     end
@@ -2512,7 +2824,14 @@ function handleBlackMarketAction(action)
         return
     end
     local productId = action:match("^merchant%-sell:(.+)$")
-    if productId then handleBlackMarketMerchantSale(productId) end
+    if productId then
+        handleBlackMarketMerchantSale(productId)
+        return
+    end
+    local auctionId = action:match("^auction%-bid:(.+)$")
+    if auctionId then
+        handleBlackMarketAuctionBid(auctionId)
+    end
 end
 
 function openLoadoutPanel()
@@ -2556,6 +2875,9 @@ function confirmLoadout()
     lootUI.ResetInteractionState()
     lootUI.loadoutConfirmRect = nil
     appState = "playing"
+    if configureSelectedLevel then
+        configureSelectedLevel()
+    end
     if joystick_ then joystick_._shouldShow = true end
     startGameAudio()
     BlackMarketCloud.MarkDirty("loadout_confirm", true)
@@ -3207,7 +3529,8 @@ end
 -- worldX: 左右轴（横向滚动）
 -- ============================================================================
 local GROUND_Y_RATIO = 0.90   -- 地面Y（屏幕高度比例）
-local STREET_LENGTH  = 9300
+local TOKYO_STREET_LENGTH = 9300
+local STREET_LENGTH = TOKYO_STREET_LENGTH
 -- SCENE_ZOOM 已在文件顶部声明（移动端在 Start() 中覆盖）
 
 -- 2D 投影：X轴1:1随相机滚动，Y固定在地面线，scale固定1.0
@@ -3216,6 +3539,23 @@ local function worldToScreen(worldX, _worldDepth)
     local scale   = 1.0
     local screenX = worldX - cameraX
     return screenX, screenY, scale
+end
+
+-- 场景以屏幕中心缩放后，可视世界宽度为 W / SCENE_ZOOM。
+-- 临港相机边界必须补偿中心缩放，否则世界两端会露出背景图之外的纯色区域。
+function getCameraXBounds()
+    if portLevelActive then
+        local zoom = math.max(0.1, SCENE_ZOOM)
+        local halfW = W * 0.5
+        local minCameraX = halfW / zoom - halfW
+        local maxCameraX = STREET_LENGTH - halfW - halfW / zoom
+        if maxCameraX < minCameraX then
+            local centered = (minCameraX + maxCameraX) * 0.5
+            return centered, centered
+        end
+        return minCameraX, maxCameraX
+    end
+    return 0, math.max(0, STREET_LENGTH - W)
 end
 
 -- 兼容旧代码引用
@@ -3344,7 +3684,21 @@ function drawBatDemoAnimation(ctx)
     local drawW = framePixelW * scale
     local drawH = altFrameH * scale
     local baseX = player.x - cameraX
-    local visualOffsetY = player.actionState == "climb" and 0 or PLAYER_VISUAL_OFFSET_Y
+    local visualOffsetY
+    if player.actionState == "climb" then
+        visualOffsetY = 0
+    elseif portLevelActive then
+        -- 临港素材以道路表面作为绝对地面；按各套序列帧透明底边校正脚底锚点。
+        if demo == PLAYER_ANIM_CONFIGS.bat then
+            visualOffsetY = 2
+        elseif demo == PLAYER_ANIM_CONFIGS.shotgun then
+            visualOffsetY = -2
+        else
+            visualOffsetY = -11
+        end
+    else
+        visualOffsetY = PLAYER_VISUAL_OFFSET_Y
+    end
     local baseY = H * GROUND_Y_RATIO + player.jumpScrY
         + (demo.footOffsetY or 0) + visualOffsetY
     -- 扩展帧只增加右侧画布，角色锚点仍沿用原 834px 画布中心，避免攻击时角色跳位。
@@ -4168,7 +4522,8 @@ end
 -- 剖面楼碰撞数据（由 initCrossSection 填充）
 csColliders = csColliders or { slabs = {}, walls = {} }
 
-PLAYER_START_X = 7000 -- 出生在第二栋楼一层左侧房间内，靠近入口门
+PLAYER_START_X = 7000 -- 东京关卡出生在第二栋楼一层左侧房间内，靠近入口门
+local TOKYO_PLAYER_START_X = PLAYER_START_X
 
 ---@diagnostic disable-next-line: redefined-local
 player = {
@@ -4221,7 +4576,8 @@ local function initPlayer()
     player.maxStamina = player.maxStamina or 100
     player.stamina = player.maxStamina
     player.staminaExhausted = false
-    cameraX = math.max(0, player.x - W * 0.4)
+    local minCameraX, maxCameraX = getCameraXBounds()
+    cameraX = clamp(player.x - W * 0.4, minCameraX, maxCameraX)
 end
 
 local function drawPlayer(ctx)
@@ -4570,8 +4926,9 @@ local function updatePlayer(dt)
     end
     if not drag.active and drag.cooldown <= 0 then
         local targetCamX = player.x - W * 0.4
+        local minCameraX, maxCameraX = getCameraXBounds()
         cameraX = cameraX + (targetCamX - cameraX) * math.min(dt * 6, 1.0)
-        cameraX = clamp(cameraX, 0, STREET_LENGTH - W)
+        cameraX = clamp(cameraX, minCameraX, maxCameraX)
         -- 垂直偏移：跟随玩家上下楼/地下室
         ---@type number
         local camYTarget = CAMERA_BASE_Y
@@ -4995,18 +5352,11 @@ function drawLightSwitch(ctx, sx, sy, key, isNear)
     nvgFill(ctx)
 
     if isNear then
-        local pulse = math.sin(gameTime * 5.0) * 0.35 + 0.65
         nvgBeginPath(ctx)
-        nvgRoundedRect(ctx, x - 5, y - 5, boxW + 10, boxH + 10, 7)
-        nvgStrokeColor(ctx, on and nvgRGBA(255, 230, 120, math.floor(95 * pulse)) or nvgRGBA(255, 255, 255, math.floor(80 * pulse)))
-        nvgStrokeWidth(ctx, 2.5)
+        nvgCircle(ctx, sx, sy, 8)
+        nvgStrokeColor(ctx, nvgRGBA(193, 143, 48, math.floor(115 * pulse)))
+        nvgStrokeWidth(ctx, 1.3)
         nvgStroke(ctx)
-
-        nvgFontFace(ctx, "sans")
-        nvgFontSize(ctx, 12)
-        nvgTextAlign(ctx, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-        nvgFillColor(ctx, nvgRGBA(255, 255, 230, math.floor(230 * pulse)))
-        nvgText(ctx, sx, y - 12, on and "关灯" or "开灯")
     end
 end
 
@@ -5014,24 +5364,29 @@ function refreshLightToggleUIRect()
     lightToggleUIRect = nil
     if lootUI.active or lootUI.letterOpen or not playerNearLightSwitch then return nil end
 
-    local bw = 118
-    local bh = 46
-    local safeBottom = 0
-    if GetSafeAreaInsets then
-        local safeRect = GetSafeAreaInsets(false)
-        if safeRect and safeRect.max then
-            safeBottom = (safeRect.max.y or 0) / dpr
+    local anchorX = clamp(player.x - cameraX + 74, 70, W - 70)
+    local anchorY = clamp(H * GROUND_Y_RATIO + player.jumpScrY - 94, 70, H - 100)
+    for _, sw in ipairs(lightSwitchDrawQueue or {}) do
+        if sw.key == playerNearLightSwitch then
+            anchorX = sw.sx
+            anchorY = sw.sy
+            break
         end
     end
-    local searchCenterX = W - 66
-    local searchCenterY = H - safeBottom - 128
-    local searchW = 78
-    local gap = 14
-    local bx = searchCenterX - searchW * 0.5 - gap - bw
-    local by = searchCenterY - bh * 0.5
-    bx = math.max(12, bx)
-    by = math.max(H * 0.48, by)
-    lightToggleUIRect = { x = bx, y = by, w = bw, h = bh, key = playerNearLightSwitch }
+    local side = anchorX > W * 0.68 and "left" or "right"
+    local hitW = 104
+    local hitH = 58
+    local hitX = side == "left" and (anchorX - 150) or (anchorX - 12)
+    lightToggleUIRect = {
+        x = hitX,
+        y = anchorY - 34,
+        w = hitW,
+        h = hitH,
+        key = playerNearLightSwitch,
+        anchorX = anchorX,
+        anchorY = anchorY,
+        side = side,
+    }
     return lightToggleUIRect
 end
 
@@ -5376,152 +5731,35 @@ function drawLightToggleUIButton(ctx)
     local r = refreshLightToggleUIRect()
     if not r then return end
 
-    local on = isRoomLightOn(r.key)
-    local text = on and "关灯" or "开灯"
-    local bx, by, bw, bh = r.x, r.y, r.w, r.h
-
-    local pulse = math.sin(gameTime * 5.5) * 0.35 + 0.65
-    nvgSave(ctx)
-    nvgResetTransform(ctx)
-    nvgResetScissor(ctx)
-    nvgScale(ctx, dpr, dpr)
-
-    nvgGlobalCompositeOperation(ctx, NVG_LIGHTER)
-    local glow = nvgRadialGradient(ctx, bx + bw * 0.5, by + bh * 0.5, 8, 68,
-        on and nvgRGBA(255, 220, 90, math.floor(95 * pulse)) or nvgRGBA(120, 190, 255, math.floor(110 * pulse)),
-        nvgRGBA(0, 0, 0, 0))
-    nvgBeginPath(ctx)
-    nvgRoundedRect(ctx, bx - 10, by - 10, bw + 20, bh + 20, 20)
-    nvgFillPaint(ctx, glow)
-    nvgFill(ctx)
-    nvgGlobalCompositeOperation(ctx, NVG_SOURCE_OVER)
-
-    nvgBeginPath(ctx)
-    nvgRoundedRect(ctx, bx, by, bw, bh, 13)
-    nvgFillColor(ctx, on and nvgRGBA(95, 70, 32, 235) or nvgRGBA(28, 42, 62, 242))
-    nvgFill(ctx)
-    nvgStrokeColor(ctx, on and nvgRGBA(255, 225, 120, 255) or nvgRGBA(165, 218, 255, 255))
-    nvgStrokeWidth(ctx, 2.5)
-    nvgStroke(ctx)
-
-    nvgBeginPath(ctx)
-    nvgCircle(ctx, bx + 23, by + bh * 0.5, 10)
-    nvgFillColor(ctx, on and nvgRGBA(255, 224, 95, 255) or nvgRGBA(95, 180, 255, 255))
-    nvgFill(ctx)
-    nvgStrokeColor(ctx, nvgRGBA(255, 255, 255, 190))
-    nvgStrokeWidth(ctx, 1.5)
-    nvgStroke(ctx)
-
-    nvgFontFace(ctx, "sans")
-    nvgTextAlign(ctx, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
-    nvgFontSize(ctx, 20)
-    nvgFillColor(ctx, nvgRGBA(255, 255, 235, 255))
-    nvgText(ctx, bx + bw * 0.62, by + bh * 0.5, text)
-    nvgRestore(ctx)
+    GameplayHUD.DrawPrompt(ctx, {
+        x = r.anchorX,
+        y = r.anchorY,
+        text = isRoomLightOn(r.key) and "关灯" or "开灯",
+        side = r.side,
+        scale = math.min(W / 1365, H / 768),
+        key = r.key,
+    })
 end
 
 function drawSearchButton(ctx)
     if settingsUI.active then return end
-    if appState ~= "playing" or lootUI.active then
+    if appState ~= "playing" or lootUI.active
+        or not lootBtn_ or not lootBtn_._shouldShow then
         lootUI.searchButtonRect = nil
         return
     end
-    if not lootBtn_ or not lootBtn_._shouldShow then
-        lootUI.searchButtonRect = nil
-        return
-    end
 
-    local safeBottom = 0
-    if GetSafeAreaInsets then
-        local safeRect = GetSafeAreaInsets(false)
-        if safeRect and safeRect.max then
-            safeBottom = (safeRect.max.y or 0) / dpr
-        end
-    end
-    local pressed = lootUI.searchPressedTimer > 0
-    local searchScale = pressed and 0.92 or 1.0
-    local searchW = 78
-    local searchH = 48
-    local searchCenterX = W - 66
-    local searchCenterY = H - safeBottom - 128
-    local searchRectW = 90
-    local searchRectH = 62
-    lootUI.searchButtonRect = {
-        x = searchCenterX - searchRectW * 0.5,
-        y = searchCenterY - searchRectH * 0.5,
-        w = searchRectW,
-        h = searchRectH,
-    }
-
-    nvgSave(ctx)
-    nvgResetTransform(ctx)
-    nvgResetScissor(ctx)
-    nvgScale(ctx, dpr, dpr)
-    nvgTranslate(ctx, searchCenterX, searchCenterY)
-    nvgScale(ctx, searchScale, searchScale)
-    nvgTranslate(ctx, -searchCenterX, -searchCenterY)
-
-    local pulse = math.sin(gameTime * 4.5) * 0.5 + 0.5
-    local glowAlpha = math.floor(16 + pulse * 18)
-    nvgGlobalCompositeOperation(ctx, NVG_LIGHTER)
-    local glow = nvgRadialGradient(ctx, searchCenterX, searchCenterY, 12, 52,
-        nvgRGBA(235, 176, 62, glowAlpha), nvgRGBA(235, 176, 62, 0))
-    nvgBeginPath(ctx)
-    nvgRoundedRect(ctx, searchCenterX - searchW * 0.5 - 7, searchCenterY - searchH * 0.5 - 7,
-        searchW + 14, searchH + 14, 14)
-    nvgFillPaint(ctx, glow)
-    nvgFill(ctx)
-    nvgGlobalCompositeOperation(ctx, NVG_SOURCE_OVER)
-
-    local bx = searchCenterX - searchW * 0.5
-    local by = searchCenterY - searchH * 0.5
-    local cut = 8
-    nvgBeginPath(ctx)
-    nvgMoveTo(ctx, bx + cut, by)
-    nvgLineTo(ctx, bx + searchW, by)
-    nvgLineTo(ctx, bx + searchW, by + searchH - cut)
-    nvgLineTo(ctx, bx + searchW - cut, by + searchH)
-    nvgLineTo(ctx, bx, by + searchH)
-    nvgLineTo(ctx, bx, by + cut)
-    nvgClosePath(ctx)
-    nvgFillColor(ctx, nvgRGBA(17, 19, 22, 218))
-    nvgFill(ctx)
-    nvgStrokeColor(ctx, nvgRGBA(224, 170, 67, 220))
-    nvgStrokeWidth(ctx, 1.5)
-    nvgStroke(ctx)
-
-    nvgBeginPath(ctx)
-    nvgRect(ctx, bx, by + cut, 3, searchH - cut * 2)
-    nvgFillColor(ctx, nvgRGBA(235, 176, 62, 255))
-    nvgFill(ctx)
-
-    -- 小型抽屉图标，与攻击、装弹按钮使用相同的战术线框语言。
-    local iconCX = bx + 20
-    local iconCY = searchCenterY
-    nvgBeginPath(ctx)
-    nvgRoundedRect(ctx, iconCX - 9, iconCY - 8, 18, 16, 2)
-    nvgStrokeColor(ctx, nvgRGBA(244, 204, 116, 245))
-    nvgStrokeWidth(ctx, 1.6)
-    nvgStroke(ctx)
-    nvgBeginPath(ctx)
-    nvgMoveTo(ctx, iconCX - 7, iconCY - 2)
-    nvgLineTo(ctx, iconCX + 7, iconCY - 2)
-    nvgMoveTo(ctx, iconCX - 2, iconCY + 3)
-    nvgLineTo(ctx, iconCX + 2, iconCY + 3)
-    nvgStrokeColor(ctx, nvgRGBA(224, 170, 67, 240))
-    nvgStrokeWidth(ctx, 1.4)
-    nvgStroke(ctx)
-
-    nvgFontFace(ctx, "sans")
-    nvgFontSize(ctx, 6.5)
-    nvgTextAlign(ctx, NVG_ALIGN_LEFT + NVG_ALIGN_TOP)
-    nvgFillColor(ctx, nvgRGBA(224, 170, 67, 225))
-    nvgText(ctx, bx + 34, by + 6, "SEARCH")
-    nvgFontSize(ctx, 13)
-    nvgTextAlign(ctx, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
-    nvgFillColor(ctx, nvgRGBA(244, 241, 229, 250))
-    nvgText(ctx, bx + 34, by + 31, "搜刮")
-    nvgRestore(ctx)
+    local anchorX = clamp(player.x - cameraX + 72, 70, W - 70)
+    local anchorY = clamp(H * GROUND_Y_RATIO + player.jumpScrY - 58, 70, H - 100)
+    local side = anchorX > W * 0.68 and "left" or "right"
+    local rect = GameplayHUD.DrawPrompt(ctx, {
+        x = anchorX,
+        y = anchorY,
+        text = lootUI.letterNear and "阅读" or "搜刮",
+        side = side,
+        scale = math.min(W / 1365, H / 768),
+    })
+    lootUI.searchButtonRect = rect
 end
 
 function isPlayerNearLightSwitch(worldX, screenY, rangeX, rangeY)
@@ -13505,6 +13743,54 @@ local function initCrossSection()
     end
 end
 
+configureSelectedLevel = function()
+    portLevelActive = MapSelection.selectedMapId == "osaka"
+    cameraY = CAMERA_BASE_Y
+    floorTransition.active = false
+    floorTransition.phase = "none"
+    floorTransition.alpha = 1.0
+    ladderTransition.active = false
+    ladderTransition.phase = "none"
+
+    if portLevelActive then
+        local layout = PortLevel.Recalculate(H, H * GROUND_Y_RATIO, SCENE_ZOOM)
+        portWorldPanelW = layout.worldLength
+        portGateWorldX = layout.gateX
+        STREET_LENGTH = math.max(W, portWorldPanelW)
+        PLAYER_START_X = PortLevel.GetPlayerStartX()
+        PortLevel.ApplyColliders(csColliders)
+        print(string.format(
+            "[Level] 进入大阪临港工业区: world=%.1f start=%.1f gate=%.1f",
+            STREET_LENGTH,
+            PLAYER_START_X,
+            portGateWorldX
+        ))
+    else
+        -- 当前已完成的住宅楼、街区、搜刮点和室内结构统一归属东京关卡。
+        portWorldPanelW = 0
+        portGateWorldX = 0
+        STREET_LENGTH = TOKYO_STREET_LENGTH
+        PLAYER_START_X = TOKYO_PLAYER_START_X
+        initCrossSection()
+        print("[Level] 进入东京废弃城区，加载现有街区关卡")
+    end
+
+    initPlayer()
+    initRain()
+    if portLevelActive then
+        zombies = {}
+        for _, spawnX in ipairs(PortLevel.GetZombieSpawns()) do
+            if math.abs(spawnX - portGateWorldX) > 120 then
+                spawnZombie(false, spawnX)
+            end
+        end
+        zombieSpawnTimer = 1.2
+        print("[PortLevel] 临港丧尸初始化=" .. tostring(#zombies))
+    else
+        spawnInitialZombies()
+    end
+end
+
 -- ============================================================================
 -- 绘制：地下剖面（横版格斗经典风格）
 -- ============================================================================
@@ -13695,10 +13981,12 @@ end
 
 -- ============================================================================
 -- 绘制：丧尸（序列帧动画，旧 Spine 兜底）
+-- 相关 helper 收敛到单个 namespace，避免顶层 chunk 超过 Lua 的 200 个 local 限制。
 -- ============================================================================
+local lateRender = {}
 local ZOMBIE_DRAW_H = 132  -- 丧尸显示高度（逻辑像素）
 
-local function getZombieSequenceFrame(z)
+function lateRender.getZombieSequenceFrame(z)
     local cfg = ZOMBIE_ANIM_CONFIG
     local state = z.animState or "idle"
     local actionCfg = cfg.actions[state] or cfg.actions.idle
@@ -13713,9 +14001,9 @@ local function getZombieSequenceFrame(z)
     return actionCfg, frameIndex
 end
 
-local function drawZombieSequence(ctx, z, sx, sy, sc)
+function lateRender.drawZombieSequence(ctx, z, sx, sy, sc)
     local cfg = ZOMBIE_ANIM_CONFIG
-    local actionCfg, frameIndex = getZombieSequenceFrame(z)
+    local actionCfg, frameIndex = lateRender.getZombieSequenceFrame(z)
     if not actionCfg or not actionCfg.frames or #actionCfg.frames == 0 then return false end
     local img = actionCfg.frames[frameIndex]
     if not img or img <= 0 then return false end
@@ -13756,12 +14044,12 @@ local function drawZombieSequence(ctx, z, sx, sy, sc)
     return true
 end
 
-local function drawOneZombie(ctx, z)
+function lateRender.drawOneZombie(ctx, z)
     if z.shattered then return end
     local sx, sy, sc = worldToScreen(z.x, 0)
     if sx < -160 or sx > W + 160 then return end
 
-    if drawZombieSequence(ctx, z, sx, sy, sc) then return end
+    if lateRender.drawZombieSequence(ctx, z, sx, sy, sc) then return end
 
     if not z.spine or not z.spine:IsLoaded() then return end
 
@@ -13816,7 +14104,7 @@ end
 -- ============================================================================
 -- 绘制：血液粒子
 -- ============================================================================
-local function drawBloodParticles(ctx)
+function lateRender.drawBloodParticles(ctx)
     for _, bp in ipairs(bloodParticles) do
         local bx = bp.x - cameraX
         if bx < -20 or bx > W + 20 then goto skipBlood end
@@ -13845,7 +14133,7 @@ end
 
 -- 绘制：粒子 + 雾气
 -- ============================================================================
-local function drawParticles(ctx)
+function lateRender.drawParticles(ctx)
     for _, p in ipairs(dustParticles) do
         local px = p.x - cameraX * 0.25
         px = px % (W + 20) - 10
@@ -13868,7 +14156,7 @@ local function drawParticles(ctx)
     end
 end
 
-local function drawFog(ctx)
+function lateRender.drawFog(ctx)
     local groundY = H * GROUND_Y_RATIO
     -- 地面底部向下淡出雾（增强纵深感）
     local fogBot = nvgLinearGradient(ctx, 0, groundY, 0, H,
@@ -13882,8 +14170,10 @@ end
 
 -- ============================================================================
 -- 更新
+-- 相关检测与更新 helper 收敛到单个 namespace，为主 chunk 保留 local 余量。
 -- ============================================================================
-local function isPlayerOnDoorFloor(fi)
+local lateUpdate = {}
+function lateUpdate.isPlayerOnDoorFloor(fi)
     local slabAbove = (fi > 1) and csColliders.slabs[fi - 1] or nil
     local slabBelow = (fi < CS_NUM_FLOORS) and csColliders.slabs[fi] or nil
     local playerY = player.jumpScrY
@@ -13892,12 +14182,12 @@ local function isPlayerOnDoorFloor(fi)
     return playerY > topRY and playerY <= botRY
 end
 
-local function detectNearbyStairDoor()
+function lateUpdate.detectNearbyStairDoor()
     local bestFi = 0
     local bestDist = math.huge
     for fi = 1, CS_NUM_FLOORS do
         local doorCX = doorWorldCXByFi[fi]
-        if doorStates[fi] and doorCX and isPlayerOnDoorFloor(fi) then
+        if doorStates[fi] and doorCX and lateUpdate.isPlayerOnDoorFloor(fi) then
             local dist = math.abs(player.x - doorCX)
             if dist < 120 and dist < bestDist then
                 bestFi = fi
@@ -13936,12 +14226,12 @@ function detectNearbyCS2StairDoor()
     return bestFi
 end
 
-local function detectNearbyBasementLadder()
+function lateUpdate.detectNearbyBasementLadder()
     local info = getNearestLadderInfo()
     return info ~= nil and info.side == nil
 end
 
-local function detectNearbyRoomDoor()
+function lateUpdate.detectNearbyRoomDoor()
     local bestDoorKey = nil
     local bestScore = math.huge
     local feetY = player.jumpScrY
@@ -13975,7 +14265,7 @@ local function detectNearbyRoomDoor()
     return bestDoorKey
 end
 
-local function detectNearbyLightSwitch()
+function lateUpdate.detectNearbyLightSwitch()
     local bestKey = nil
     local bestScore = math.huge
     local touchY = H * GROUND_Y_RATIO + player.jumpScrY - (player.drawH or 120) * 0.28
@@ -14031,17 +14321,17 @@ function detectCurrentRoomLightKey()
     return nil
 end
 
-local function updateGame(dt)
+function lateUpdate.updateGame(dt)
     -- 每帧用碰撞门洞数据检测靠近状态，避免依赖渲染帧导致按钮不出现
-    playerNearRoomDoor = detectNearbyRoomDoor()
-    playerNearDoorFi = detectNearbyStairDoor()
+    playerNearRoomDoor = lateUpdate.detectNearbyRoomDoor()
+    playerNearDoorFi = lateUpdate.detectNearbyStairDoor()
     playerNearCS2StairDoorFi = detectNearbyCS2StairDoor()
     if playerNearCS2StairDoorFi > 0 then
         playerNearRoomDoor = nil
     end
-    playerNearBasementLadder = detectNearbyBasementLadder()
+    playerNearBasementLadder = lateUpdate.detectNearbyBasementLadder()
     playerNearStreetBuilding = detectNearbyStreetBuilding()
-    playerNearLightSwitch = detectNearbyLightSwitch()
+    playerNearLightSwitch = lateUpdate.detectNearbyLightSwitch()
 
     -- ========== 门动画更新 ==========
     for _, ds in pairs(doorStates) do
@@ -15132,11 +15422,14 @@ function Start()
         itemIcons[name] = nvgCreateImage(vg, path, 0)
     end
     blackMarketArt.broker = nvgCreateImage(vg, "image/黑市商人渡鸦肖像_20260809093215.png", 0)
+    blackMarketArt.frame = nvgCreateImage(vg,
+        "image/黑市三页签动态UI空白框架_20260813153247.png", 0)
     blackMarketArt.tunnel_intel = nvgCreateImage(vg, "image/地下管道撤离情报地图_20260809093224.png", 0)
     blackMarketArt.lab_keycard = nvgCreateImage(vg, "image/伪造实验室门禁卡_20260809093213.png", 0)
     blackMarketArt.suppressor = nvgCreateImage(vg, "image/黑市通用战术消音器_20260809100641.png", 0)
     blackMarketArt.weapon_insurance = nvgCreateImage(vg, "image/黑市武器保险券_20260809100637.png", 0)
     print("[BlackMarket] 专用图片加载: broker=" .. tostring(blackMarketArt.broker)
+        .. " frame=" .. tostring(blackMarketArt.frame)
         .. " map=" .. tostring(blackMarketArt.tunnel_intel)
         .. " keycard=" .. tostring(blackMarketArt.lab_keycard)
         .. " suppressor=" .. tostring(blackMarketArt.suppressor)
@@ -15193,8 +15486,36 @@ function Start()
         "image/首页日本全国感染态势图_20260811135348.png", 0)
     blackMarketArt.home_location = nvgCreateImage(vg,
         "image/首页东京废弃城区预览_20260811135412.png", 0)
+    blackMarketArt.map_location_osaka = nvgCreateImage(vg,
+        "image/大阪临港工业区预览_20260814023855.png", 0)
+    blackMarketArt.map_location_sapporo = nvgCreateImage(vg,
+        "image/札幌冰封街区预览_20260814023845.png", 0)
+    portBackgroundLeftImg = nvgCreateImage(vg,
+        "image/临港关卡左侧偷渡登陆延伸背景_20260815053720.png", 0)
+    portBackgroundMainImg = nvgCreateImage(vg,
+        "image/edited_临港关卡铁门主背景_无守卫_20260815053558.png", 0)
+    portGuardImg = nvgCreateImage(vg,
+        "image/临港关卡封锁守卫透明素材_20260815053721.png", 0)
+    portBarricadeImg = nvgCreateImage(vg,
+        "image/临港关卡警戒路障透明素材_20260815053727.png", 0)
+    PortLevel.SetImages(portBackgroundLeftImg, portBackgroundMainImg, portGuardImg, portBarricadeImg)
+    print("[PortLevel] 新临港素材加载: left=" .. tostring(portBackgroundLeftImg)
+        .. " main=" .. tostring(portBackgroundMainImg)
+        .. " guard=" .. tostring(portGuardImg)
+        .. " barricade=" .. tostring(portBarricadeImg))
+    MapSelection.locations[1].previewImage = blackMarketArt.home_location
+    MapSelection.locations[2].previewImage = blackMarketArt.map_location_osaka
+    MapSelection.locations[3].previewImage = blackMarketArt.map_location_sapporo
     blackMarketArt.home_master = nvgCreateImage(vg,
         "image/首页设计稿母版.png", 0)
+    blackMarketArt.currencyIcon = nvgCreateImage(vg,
+        lootUI.currencyIconPath, 0)
+    blackMarketArt.gameplay_hud = {
+        heart = nvgCreateImage(vg, "image/gameplay_hud/heart.png", 0),
+        weapon = nvgCreateImage(vg, "image/gameplay_hud/weapon.png", 0),
+        backpack = nvgCreateImage(vg, "image/gameplay_hud/backpack.png", 0),
+        reload = nvgCreateImage(vg, "image/gameplay_hud/reload.png", 0),
+    }
     blackMarketArt.warehouse_master = nvgCreateImage(vg,
         "image/warehouse/据点仓库设计稿母版.png", 0)
     blackMarketArt.warehouse_cells = {
@@ -15249,8 +15570,14 @@ function Start()
         logo = nvgCreateImage(vg, "image/home_layers/首页Logo.png", 0),
         survivorFrame = nvgCreateImage(vg, "image/home_layers/面板边框_角色.png", 0),
         mapFrame = nvgCreateImage(vg, "image/home_layers/面板边框_态势地图.png", 0),
+        nationalMapClean = nvgCreateImage(vg,
+            "image/home_layers/全国态势地图_无东京固定框.png", 0),
         locationFrame = nvgCreateImage(vg, "image/home_layers/面板边框_地图情报.png", 0),
         topChip = nvgCreateImage(vg, "image/home_layers/顶部信息条背景.png", 0),
+        shelterStatusIcon = nvgCreateImage(vg,
+            "image/home_layers/status/据点等级图标.png", 0),
+        survivorStatusIcon = nvgCreateImage(vg,
+            "image/home_layers/status/幸存者人数图标.png", 0),
         navButton = nvgCreateImage(vg, "image/home_layers/底部导航按钮背景.png", 0),
         equipButton = nvgCreateImage(vg, "image/home_layers/战前整备按钮背景.png", 0),
         changeMapButton = nvgCreateImage(vg, "image/home_layers/更换地图按钮背景.png", 0),
@@ -15368,6 +15695,10 @@ function Start()
     loadStatusText = "正在初始化游戏..."
     coroutine.yield()
 
+    -- 加载阶段先初始化东京旧关卡；实际出战时再按地图选择重新配置。
+    portLevelActive = false
+    STREET_LENGTH = TOKYO_STREET_LENGTH
+    PLAYER_START_X = TOKYO_PLAYER_START_X
     initPlayer()
 
     initParticles()
@@ -15380,6 +15711,19 @@ function Start()
     GameHUD.Initialize()
     local hud = GameHUD.Create({ enableJump = false, enableCrouch = false })
     joystick_ = hud.joystick
+    -- 摇杆输入继续使用 VirtualControls，视觉改由 GameplayHUD 按参考图绘制。
+    if joystick_ then
+        joystick_.position = Vector2(258, -197)
+        joystick_.baseRadius = 0
+        joystick_.knobRadius = 0
+        joystick_.moveRadius = 72
+        joystick_.isPressCenter = false
+        joystick_.pressRegionRadius = 210
+        joystick_.opacity = 0
+        joystick_.activeOpacity = 0
+        joystick_.currentOpacity = 0
+        joystick_.showKeyHints = false
+    end
 
     -- 开门按钮改由主 NanoVG HUD 绘制和命中，保留状态表避免默认圆形按钮抢占位置。
     descendBtn_ = { _shouldShow = false }
@@ -15460,6 +15804,42 @@ function Start()
     print("=== 末世搜寻 - 丧尸世界 ===")
 end
 
+function getSelectedMap()
+    local osaka = nil
+    for _, map in ipairs(MapSelection.locations) do
+        if map.id == "osaka" then osaka = map end
+        if map.id == MapSelection.selectedMapId then return map end
+    end
+    return osaka or MapSelection.locations[1]
+end
+
+function handleMapSelectAction(action)
+    if not action then return end
+    if action == "back" then
+        appState = "home"
+        HomeUI.Reset()
+        print("[MapSelect] 返回据点首页，保留原地点")
+    elseif action == "confirm" then
+        MapSelection.selectedMapId = MapSelectUI.GetSelectedMapId()
+        local map = getSelectedMap()
+        appState = "home"
+        HomeUI.Reset()
+        HomeUI.SetNotice("已选择：" .. tostring(map.name), 2.4)
+        print("[MapSelect] 已确认地点: " .. tostring(map.name))
+    elseif action:match("^select:") then
+        local mapId = action:match("^select:(.+)$")
+        for _, map in ipairs(MapSelection.locations) do
+            if map.id == mapId then
+                -- 地图标记选中后立即同步正式部署状态，避免界面显示大阪、出战仍读取旧地图。
+                MapSelection.selectedMapId = mapId
+                playHomeUISound("tab")
+                print("[MapSelect] 已选择地点: " .. tostring(map.name))
+                break
+            end
+        end
+    end
+end
+
 function handleHomeAction(action)
     if action == "equip" then
         openLoadoutPanel()
@@ -15470,8 +15850,9 @@ function handleHomeAction(action)
         print("[Home] 使用当前装备出战")
     elseif action == "change-map" then
         playHomeUISound("tab")
-        HomeUI.SetNotice("当前版本仅开放：东京废弃城区", 2.8)
-        print("[Home] 地图选择：当前仅开放东京废弃城区")
+        appState = "map-select"
+        MapSelectUI.Open(MapSelection.selectedMapId)
+        print("[Home] 打开日本地图地点选择")
     elseif action == "blackmarket" then
         playHomeUISound("tab")
         openBlackMarketPanel()
@@ -15498,13 +15879,16 @@ function handleHomeAction(action)
 end
 
 function HandleTouchBegin(eventType, eventData)
-    if appState ~= "home" and appState ~= "warehouse" and appState ~= "shop"
+    if appState ~= "home" and appState ~= "map-select"
+        and appState ~= "warehouse" and appState ~= "shop"
         and appState ~= "codex" and appState ~= "blackmarket" then return end
     local touchId = eventData:GetInt("TouchID")
     local x = eventData:GetInt("X") / dpr
     local y = eventData:GetInt("Y") / dpr
     if appState == "home" then
         HomeUI.PointerDown(x, y)
+    elseif appState == "map-select" then
+        MapSelectUI.TouchBegin(touchId, x, y)
     elseif appState == "blackmarket" then
         BlackMarketUI.TouchBegin(touchId, x, y)
     elseif appState == "shop" then
@@ -15517,13 +15901,16 @@ function HandleTouchBegin(eventType, eventData)
 end
 
 function HandleTouchMove(eventType, eventData)
-    if appState ~= "home" and appState ~= "warehouse" and appState ~= "shop"
+    if appState ~= "home" and appState ~= "map-select"
+        and appState ~= "warehouse" and appState ~= "shop"
         and appState ~= "codex" and appState ~= "blackmarket" then return end
     if appState == "home" then return end
     local touchId = eventData:GetInt("TouchID")
     local x = eventData:GetInt("X") / dpr
     local y = eventData:GetInt("Y") / dpr
-    if appState == "blackmarket" then
+    if appState == "map-select" then
+        MapSelectUI.TouchMove(touchId, x, y)
+    elseif appState == "blackmarket" then
         BlackMarketUI.TouchMove(touchId, x, y)
     elseif appState == "shop" then
         ShopUI.TouchMove(touchId, x, y)
@@ -15535,13 +15922,17 @@ function HandleTouchMove(eventType, eventData)
 end
 
 function HandleTouchEnd(eventType, eventData)
-    if appState ~= "home" and appState ~= "warehouse" and appState ~= "shop"
+    if appState ~= "home" and appState ~= "map-select"
+        and appState ~= "warehouse" and appState ~= "shop"
         and appState ~= "codex" and appState ~= "blackmarket" then return end
     local touchId = eventData:GetInt("TouchID")
     local x = eventData:GetInt("X") / dpr
     local y = eventData:GetInt("Y") / dpr
     if appState == "home" then
         handleHomeAction(HomeUI.PointerUp(x, y))
+        return
+    elseif appState == "map-select" then
+        handleMapSelectAction(MapSelectUI.TouchEnd(touchId, x, y))
         return
     elseif appState == "blackmarket" then
         handleBlackMarketAction(BlackMarketUI.TouchEnd(touchId, x, y))
@@ -15576,6 +15967,9 @@ function HandleMouseDown(eventType, eventData)
         if appState == "home" then
             HomeUI.PointerDown(x, y)
             return
+        elseif appState == "map-select" then
+            if not MapSelectUI.ShouldIgnoreMouse() then MapSelectUI.PointerDown(x, y) end
+            return
         elseif appState == "blackmarket" then
             if not BlackMarketUI.ShouldIgnoreMouse() then BlackMarketUI.PointerDown(x, y) end
             return
@@ -15601,6 +15995,11 @@ function HandleMouseUp(eventType, eventData)
         local y = eventData:GetInt("Y") / dpr
         if appState == "home" then
             handleHomeAction(HomeUI.PointerUp(x, y))
+            return
+        elseif appState == "map-select" then
+            if not MapSelectUI.ShouldIgnoreMouse() then
+                handleMapSelectAction(MapSelectUI.PointerUp(x, y))
+            end
             return
         elseif appState == "blackmarket" then
             if not BlackMarketUI.ShouldIgnoreMouse() then
@@ -15647,6 +16046,9 @@ function HandleMouseMove(eventType, eventData)
     if appState == "home" then
         HomeUI.PointerMove(x, y)
         return
+    elseif appState == "map-select" then
+        if not MapSelectUI.ShouldIgnoreMouse() then MapSelectUI.PointerMove(x, y) end
+        return
     elseif appState == "blackmarket" then
         if not BlackMarketUI.ShouldIgnoreMouse() then BlackMarketUI.PointerMove(x, y) end
         return
@@ -15665,7 +16067,8 @@ function HandleMouseMove(eventType, eventData)
     if drag.enabled and drag.active then
         local dx = eventData:GetInt("DX") / dpr
         local dy = eventData:GetInt("DY") / dpr
-        cameraX = clamp(cameraX - dx, 0, STREET_LENGTH - W)
+        local minCameraX, maxCameraX = getCameraXBounds()
+        cameraX = clamp(cameraX - dx, minCameraX, maxCameraX)
         cameraY = clamp(cameraY + dy, -500, 1500)
     end
 end
@@ -15786,6 +16189,7 @@ function HandleUpdate(eventType, eventData)
     end
 
     updateBlackMarketRefresh(dt)
+    updateBlackMarketAuctions(dt)
 
     if appState == "home" then
         gameTime = gameTime + dt
@@ -15810,40 +16214,28 @@ function HandleUpdate(eventType, eventData)
         elseif homeTouchActive then
             homeTouchActive = false
             local action = HomeUI.PointerUp(homeTouchX, homeTouchY)
-            if action == "equip" then
-                playHomeUISound("equip")
-                openLoadoutPanel()
-                print("[Home] 触摸打开装备界面")
-            elseif action == "deploy" then
-                playHomeUISound("deploy")
-                confirmLoadout()
-                print("[Home] 触摸使用当前装备出战")
-            elseif action == "change-map" then
-                playHomeUISound("tab")
-                HomeUI.SetNotice("当前版本仅开放：东京废弃城区", 2.8)
-                print("[Home] 触摸地图选择：当前仅开放东京废弃城区")
-            elseif action == "blackmarket" then
-                playHomeUISound("tab")
-                openBlackMarketPanel()
-                print("[Home] 触摸打开黑市交易终端")
-            elseif action == "shop" then
-                playHomeUISound("tab")
-                openShopPanel()
-                print("[Home] 触摸打开战术补给商城")
-            elseif action == "warehouse" then
-                playHomeUISound("warehouse")
-                lootUI.CleanupTakenEntries(warehouseTabs[1].items)
-                appState = "warehouse"
-                WarehouseUI.Open(warehouseTabs)
-                print("[Home] 触摸打开独立据点仓库")
-            elseif action then
-                playHomeUISound("tab")
-                print("[Home] 触摸切换首页页签: " .. tostring(action))
-            end
+            handleHomeAction(action)
         elseif input:GetKeyPress(KEY_RETURN) or input:GetKeyPress(KEY_SPACE) then
             playHomeUISound("deploy")
             confirmLoadout()
             print("[Home] 键盘使用当前装备出战")
+        end
+        return
+    end
+
+    if appState == "map-select" then
+        gameTime = gameTime + dt
+        MapSelectUI.Update(dt)
+        if joystick_ then joystick_._shouldShow = false end
+        if descendBtn_ then descendBtn_._shouldShow = false end
+        if doorBtn_ then doorBtn_._shouldShow = false end
+        if upBtn_ then upBtn_._shouldShow = false end
+        if downBtn_ then downBtn_._shouldShow = false end
+        if lootBtn_ then lootBtn_._shouldShow = false end
+        if input:GetKeyPress(KEY_ESCAPE) then
+            appState = "home"
+            HomeUI.Reset()
+            print("[MapSelect] 键盘返回据点首页")
         end
         return
     end
@@ -16019,7 +16411,8 @@ function HandleUpdate(eventType, eventData)
         -- 判断玩家是否在建筑内（x在建筑世界范围内）
         local wLeft = csInfo.worldAnnexLeft or 9999
         local wRight = (csInfo.worldX or -9999) + (csInfo.worldW or 0)
-        local isIndoor = (player.x >= wLeft and player.x <= wRight) or (getCurrentStreetBuilding() ~= nil)
+        local isIndoor = not portLevelActive
+            and ((player.x >= wLeft and player.x <= wRight) or (getCurrentStreetBuilding() ~= nil))
         local targetGain = isIndoor and 0.1 or 0.35
         -- 平滑过渡音量
         local curGain = rainSrcComp.gain
@@ -16034,7 +16427,7 @@ function HandleUpdate(eventType, eventData)
     end
 
     gameTime = gameTime + dt
-    updateGame(dt)
+    lateUpdate.updateGame(dt)
     updateLampFlicker(dt)
     end
 
@@ -16249,7 +16642,7 @@ function HandleUpdate(eventType, eventData)
                 end
             end
 
-            player.overlayTint = tint
+            player.overlayTint = portLevelActive and 0.88 or tint
     end
 end
 
@@ -16476,6 +16869,56 @@ end
 
 function drawPlayerStatusHUD(ctx)
     if appState ~= "playing" or settingsUI.active or lootUI.letterOpen then return end
+
+    do
+        local hasWeapon = lootUI.equippedGunItem ~= "" or lootUI.equippedMeleeItem ~= ""
+        local weaponName = PLAYER_ANIM_SET == "bat" and "棒球棍"
+            or (PLAYER_ANIM_SET == "shotgun" and "散弹枪" or "手枪")
+        local moveX, moveY = 0, 0
+        if joystick_ then moveX, moveY = joystick_:getMovement() end
+        local playerScreenX = player.x - cameraX
+        local promptX = clamp(playerScreenX + 72, 120, W - 120)
+        local promptY = clamp(H * GROUND_Y_RATIO + player.jumpScrY - 76, 90, H - 130)
+        local hudRects = GameplayHUD.Draw(ctx, {
+            width = W,
+            height = H,
+            time = gameTime,
+            hp = player.hp,
+            hpMax = player.maxHp,
+            hpRatio = (player.hp or 0) / math.max(1, player.maxHp or 100),
+            stamina = player.stamina,
+            staminaMax = player.maxStamina,
+            ammo = player.ammo,
+            ammoMax = player.maxAmmo,
+            hasWeapon = hasWeapon,
+            weaponIcon = itemIcons[weaponName],
+            backpackImage = backpackTier2Img,
+            sprites = blackMarketArt.gameplay_hud,
+            showReload = lootUI.equippedGunItem ~= ""
+                and isFirearmAnimSet() and not lootUI.active,
+            consumeName = nil,
+            showDoor = (descendBtn_ and descendBtn_._shouldShow)
+                or (doorBtn_ and doorBtn_._shouldShow),
+            doorText = "开门",
+            doorAnchorX = promptX,
+            doorAnchorY = promptY,
+            showLadderStay = cs2LadderDownHUDVisible
+                and ladderTransition.active
+                and ladderTransition.phase == "landingChoice",
+            attackScale = attackHUDScale,
+            reloadScale = reloadHUDScale,
+            moveX = moveX,
+            moveY = moveY,
+        })
+        weaponHUDRect = hudRects.weapon
+        attackHUDRect = hudRects.attack
+        doorHUDRect = hudRects.door
+        ladderDownHUDRect = hudRects.ladder
+        reloadHUDRect = hudRects.reload
+        consumeHUDRect = hudRects.consume
+        inventoryHUDRect = hudRects.inventory
+        return
+    end
 
     local hpMax = math.max(1, player.maxHp or 100)
     local hp = clamp(player.hp or hpMax, 0, hpMax)
@@ -17256,16 +17699,18 @@ function HandleNanoVGRender(eventType, eventData)
     end
 
     if appState == "home" then
+        local selectedMap = getSelectedMap()
         local homeData = {
-            bits = lootUI and lootUI.bits or "12,840",
+            bits = lootUI and lootUI.bits or 30000,
+            currencyIcon = blackMarketArt.currencyIcon,
             playerImage = playerImg,
-            crisisImage = blackMarketArt.home_crisis,
             survivorImage = blackMarketArt.home_survivor,
             nationalMapImage = blackMarketArt.home_national_map,
-            locationImage = blackMarketArt.home_location,
+            locationImage = blackMarketArt.map_location_osaka,
             masterImage = blackMarketArt.home_master,
             layers = blackMarketArt.home_layers,
-            selectedMapName = "东京废弃城区",
+            selectedMap = selectedMap,
+            selectedMapName = selectedMap.name,
             shelterLevel = 6,
             survivorCount = "42 / 60",
             playerLevel = 18,
@@ -17281,9 +17726,21 @@ function HandleNanoVGRender(eventType, eventData)
         return
     end
 
+    if appState == "map-select" then
+        MapSelectUI.Draw(vg, W, H, {
+            maps = MapSelection.locations,
+            nationalMapImage = blackMarketArt.home_layers.nationalMapClean,
+            backgroundImage = blackMarketArt.home_layers.background,
+        })
+        nvgRestore(vg)
+        nvgEndFrame(vg)
+        return
+    end
+
     if appState == "blackmarket" then
         BlackMarketUI.Draw(vg, W, H, {
             bits = lootUI.bits,
+            currencyIcon = blackMarketArt.currencyIcon,
             reputation = blackMarketReputation,
             itemIcons = itemIcons,
             itemRarity = ITEM_RARITY,
@@ -17295,6 +17752,7 @@ function HandleNanoVGRender(eventType, eventData)
             refreshRemaining = blackMarketRefreshRemaining,
             orders = blackMarketOrders,
             merchantStock = blackMarketMerchantStock,
+            auctions = blackMarketAuctions,
             countWarehouseItem = countWarehouseItem,
             history = blackMarketHistory,
         })
@@ -17306,6 +17764,7 @@ function HandleNanoVGRender(eventType, eventData)
     if appState == "shop" then
         ShopUI.Draw(vg, W, H, {
             bits = lootUI.bits,
+            currencyIcon = blackMarketArt.currencyIcon,
             itemIcons = itemIcons,
             backgroundImage = blackMarketArt.home_layers.background,
             cellImages = blackMarketArt.warehouse_cells,
@@ -17371,10 +17830,12 @@ function HandleNanoVGRender(eventType, eventData)
     lightSwitchZones = {}
     lightSwitchDrawQueue = {}
 
-    -- 背景层：不受 SCENE_ZOOM 影响，始终铺满屏幕
-    drawSky(vg)
-    drawClouds(vg)
-    drawDistant(vg)
+    -- 临港关卡使用独立设计稿背景；东京继续使用原有天空、街区和住宅楼绘制链。
+    if not portLevelActive then
+        drawSky(vg)
+        drawClouds(vg)
+        drawDistant(vg)
+    end
 
     -- 场景缩放：以地面中心为锚点拉远镜头，降低贴图放大模糊
     -- 独立保存场景变换，确保恢复后仍保留帧级 DPR 缩放供 HUD 使用
@@ -17391,18 +17852,22 @@ function HandleNanoVGRender(eventType, eventData)
     nvgTranslate(vg, -pivotX, -pivotY)
     nvgTranslate(vg, 0, cameraY)
 
-    drawEveningOverlay(vg)
-    drawGround(vg)
-    drawForegroundGround(vg)
-    drawMcDonalds(vg, H * GROUND_Y_RATIO)
-    drawStreetProps(vg, H * GROUND_Y_RATIO)
-    drawStreetEnterableBuildings(vg, H * GROUND_Y_RATIO)
-    drawCrossSection(vg, H * GROUND_Y_RATIO)
-    drawSecondCrossSection(vg, H * GROUND_Y_RATIO)
+    if portLevelActive then
+        PortLevel.Draw(vg, cameraX, W, H, gameTime)
+    else
+        drawEveningOverlay(vg)
+        drawGround(vg)
+        drawForegroundGround(vg)
+        drawMcDonalds(vg, H * GROUND_Y_RATIO)
+        drawStreetProps(vg, H * GROUND_Y_RATIO)
+        drawStreetEnterableBuildings(vg, H * GROUND_Y_RATIO)
+        drawCrossSection(vg, H * GROUND_Y_RATIO)
+        drawSecondCrossSection(vg, H * GROUND_Y_RATIO)
+    end
 
-    -- 2D 横版：先绘制丧尸，再绘制玩家，再画铁网（覆盖角色），最后暗层
+    -- 2D 横版：先绘制丧尸，再绘制玩家；东京仍保留后续铁网与室内暗层。
     for _, z in ipairs(zombies) do
-        drawOneZombie(vg, z)
+        lateRender.drawOneZombie(vg, z)
     end
 
     -- ── 渲染球棍序列帧主角（在场景变换内，位置由 player.x/cameraX 决定）──
@@ -17546,7 +18011,8 @@ function HandleNanoVGRender(eventType, eventData)
         nvgFill(vg)
     end
 
-    -- ── 铁网栅栏（覆盖在角色之上）──
+    -- 东京住宅楼的铁网覆盖层；临港铁栏门已经烘焙在独立关卡背景中。
+    if not portLevelActive then
     do
         local fd = csInfo.fenceData
         if fd then
@@ -17597,11 +18063,14 @@ function HandleNanoVGRender(eventType, eventData)
             nvgFillColor(ctx, postC); nvgFill(ctx)
         end
     end
+    end
 
     drawRain(vg)              -- 雨在角色之上，但剔除建筑区域内的雨滴
-    drawBasementOverlay(vg)   -- 必须在玩家/丧尸之后，暗层才能盖住它们
-    for _, sw in ipairs(lightSwitchDrawQueue) do
-        drawLightSwitch(vg, sw.sx, sw.sy, sw.key, sw.isNear)
+    if not portLevelActive then
+        drawBasementOverlay(vg)   -- 东京室内暗层覆盖玩家和丧尸
+        for _, sw in ipairs(lightSwitchDrawQueue) do
+            drawLightSwitch(vg, sw.sx, sw.sy, sw.key, sw.isNear)
+        end
     end
 
     -- ── 碰撞体调试显示（暂时关闭）──────────────────────────
@@ -17650,9 +18119,9 @@ function HandleNanoVGRender(eventType, eventData)
         end
     end end  -- end if false
 
-    drawBloodParticles(vg)
-    drawParticles(vg)
-    drawFog(vg)
+    lateRender.drawBloodParticles(vg)
+    lateRender.drawParticles(vg)
+    lateRender.drawFog(vg)
 
     nvgRestore(vg)  -- 仅恢复场景变换，保留逻辑坐标的 DPR 缩放
 
@@ -17668,7 +18137,6 @@ function HandleNanoVGRender(eventType, eventData)
 
     drawPlayerStatusHUD(vg)
     drawLightToggleUIButton(vg)
-    drawExitHomeHUD(vg)
 
     -- ========== 信件界面（最顶层，纸张效果） ==========
     if lootUI.letterOpen then
